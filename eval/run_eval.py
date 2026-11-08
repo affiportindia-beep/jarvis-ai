@@ -60,10 +60,13 @@ def main():
         exp_ok = None
         if exp:
             expect_total += 1
-            exp_ok = exp.lower() in text.lower()
+            # Count Devanagari digits (३००) and Indian grouping (1,20,000) as the same number.
+            norm = text.translate(str.maketrans("०१२३४५६७८९", "0123456789")).replace(",", "")
+            exp_ok = exp.lower() in norm.lower()
             expect_pass += exp_ok
         rows.append((p, text, ok, exp_ok, tps, secs))
         print(f"[{p['id']}] script={'ok' if ok else 'WRONG'} expect={exp_ok} {tps:.1f} tok/s", flush=True)
+        print("    A: " + text.replace("\n", " / ")[:600], flush=True)
 
     with open(out, "w", encoding="utf-8") as f:
         f.write(f"## {model_name}\n\n")
