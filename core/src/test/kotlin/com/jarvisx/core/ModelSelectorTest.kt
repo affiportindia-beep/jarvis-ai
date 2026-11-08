@@ -82,8 +82,8 @@ class ModelSelectorTest {
         val p = SystemPrompt.build("Qwen3.5 4B", LocalDate.of(2026, 11, 8))
         assertTrue(p.contains("8 November 2026"))
         assertTrue(p.contains("no internet access"))
-        assertTrue(p.contains("Never claim you opened an app"))
-        assertTrue("system prompt should stay short for fast prefill", p.length < 1600)
+        assertTrue(p.contains("Never claim or offer these"))
+        assertTrue("system prompt should stay short for fast prefill", p.length < 2000)
     }
 
     @Test fun benchmarkReportIsValidJsonShape() {

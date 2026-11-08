@@ -15,6 +15,27 @@ HINTS = {  # must match com.jarvisx.core.lang.ReplyLanguage.instruction
     "HINGLISH": "Reply in Hinglish: Hindi words written in Roman (English) letters, mixed with English as the user does.",
 }
 
+# Mirror of com.jarvisx.core.lang.HindiNumberWords (checked by EvalSyncTest).
+FRACTIONS = [
+    (["ढाई", "dhai", "dhaai", "dhaee"], "2.5"),
+    (["डेढ़", "डेढ़", "डेढ", "dedh", "derh", "dedhh"], "1.5"),
+    (["साढ़े तीन", "sadhe teen", "saadhe teen", "sade teen"], "3.5"),
+    (["साढ़े चार", "sadhe char", "saadhe chaar", "sade char"], "4.5"),
+    (["आधा", "आधी", "aadha", "adha", "aadhi", "adhi"], "0.5"),
+    (["पाव", "paav", "pav"], "0.25"),
+    (["पौना", "पौने", "pauna", "paune"], "0.75"),
+]
+
+def annotate(text):
+    import re, unicodedata
+    nfc = lambda x: unicodedata.normalize("NFC", x)
+    text = nfc(text)
+    for forms, value in FRACTIONS:
+        for form in sorted({nfc(f) for f in forms}, key=len, reverse=True):
+            pattern = r"(?<![^\W\d_]|[\u0900-\u097F])" + re.escape(form) + r"(?![^\W\d_]|[\u0900-\u097F])(?!\s*\()"
+            text = re.sub(pattern, lambda m: f"{m.group(0)} ({value})", text, flags=re.IGNORECASE)
+    return text
+
 def system_prompt(model_name):
     t = (ROOT / "core/src/main/resources/jarvisx/system_prompt.txt").read_text(encoding="utf-8")
     today = datetime.date.today().strftime("%-d %B %Y")
@@ -48,7 +69,7 @@ def main():
     rows, script_pass, expect_pass, expect_total = [], 0, 0, 0
     prompts = [json.loads(l) for l in (ROOT / "eval/prompts.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
     for p in prompts:
-        user = f"{p['prompt']}\n\n({HINTS[p['lang']]})"
+        user = f"{annotate(p['prompt'])}\n\n({HINTS[p['lang']]})"
         try:
             text, tps, secs = ask(port, system, user)
         except Exception as e:  # report, don't hide

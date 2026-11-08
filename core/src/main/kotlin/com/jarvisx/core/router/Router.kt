@@ -1,5 +1,6 @@
 package com.jarvisx.core.router
 
+import com.jarvisx.core.lang.HindiNumberWords
 import com.jarvisx.core.lang.LanguageDetector
 import com.jarvisx.core.lang.ReplyLanguage
 import com.jarvisx.core.tools.Tool
@@ -43,5 +44,5 @@ class Router(private val registry: ToolRegistry) {
      * would force the whole context to be re-encoded).
      */
     fun withLanguageHint(text: String, language: ReplyLanguage): String =
-        "$text\n\n(${language.instruction})"
+        "${HindiNumberWords.annotate(text)}\n\n(${language.instruction})"
 }
