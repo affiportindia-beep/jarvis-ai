@@ -1,4 +1,4 @@
-# Testing report — Milestone 1
+# Testing report — Milestone 1 + online search + fixes
 
 Status legend: ✅ passed and verified · 🟡 built, waiting for a run on the phone · ⬜ later milestone.
 Nothing is marked passed unless the test actually ran.
@@ -8,12 +8,21 @@ Nothing is marked passed unless the test actually ran.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | API-independence guard | ✅ passed | CI run 42453800461, step "API-independence check" |
-| Unit tests (`core`) | ✅ 30/30 passed | same run, step "Unit tests (core)" |
+| Unit tests (`core`) | ✅ 44/44 passed (build 11) | CI step "Unit tests (core)" |
+| Online search parsers on LIVE Google News + Wikipedia responses | ✅ passed | `ResearchTest.liveResponsesStillParse` in CI |
 | Native build: llama.cpp b9574 + JNI bridge for arm64 | ✅ compiled; 7 CPU variants (armv8.0 → armv9.2) packaged | same run, step "Inspect APK" |
 | Debug APK | ✅ built, 99 MB | release `latest-debug` |
 | APK permissions | ✅ only INTERNET, ACCESS_NETWORK_STATE, FOREGROUND_SERVICE(_DATA_SYNC), POST_NOTIFICATIONS | `aapt2 dump permissions` in CI |
 | Model URLs and checksums | ✅ all 4 exist; SHA-256 pinned in `ModelCatalog.kt` | CI "Model catalog check" |
 | Install and run on a phone | 🟡 waiting for the first install | — |
+
+## Bugs found on the phone and fixed
+
+| Report | Cause | Fix |
+| --- | --- | --- |
+| APK download "Failed - No file" | Each build deleted and re-created the release while it was downloading | One numbered release per build; nothing deleted |
+| Answers cut off mid-sentence in longer chats (53, 44, 11 tokens) | Context window full; shifting it corrupts Qwen3.5's recurrent memory and the failure looked like a normal end | Native layer never shifts recurrent memory and reports why generation ended; app restarts the context before a turn that might not fit, retries once, and marks any incomplete answer; context 8192 when RAM allows |
+| Follow-up "so what should you do" answered generically | Small model loses the thread | Prompt rule for follow-ups; suggests the online-search button; eval cases added (`en-followup`, `hinglish-followup`) |
 
 ## Answer quality: desktop eval (2026-11-08)
 
@@ -31,6 +40,8 @@ Fixes made from this eval: Hindi fraction words (ढाई, डेढ़, सा
 spellings) get their value added before the model sees them (`HindiNumberWords`, tested);
 the system prompt now lists what this version can and cannot do and forbids inventing
 websites, places or sources. Before the fix every model read "ढाई" as 1.5 or 0.5.
+
+Typo and follow-up cases (4B): `wht is the captial of jappan` → Tokyo ✅ · `mahatma gandi ka janm kab hua tha` → 1869 ✅ · `aur Mahabharata?` after a Ramayana question → Vyasa ✅ · `so what should you do` → generic advice ❌ (prompt fix added afterwards).
 
 Remaining known limit: small models still invent facts sometimes, more often in Hindi than in
 English. JARVIS X says so on the About screen; document-grounded answers (Milestone 5) and
