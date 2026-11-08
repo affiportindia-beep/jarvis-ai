@@ -28,13 +28,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: external/llama.cpp
-          key: llama-desktop-${{ hashFiles('scripts/llama_cpp_tag.txt') }}-v1
+          key: llama-desktop-${{ hashFiles('scripts/llama_cpp_tag.txt') }}-portable-v2
       - name: Build llama-server
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           ./scripts/fetch_llama.sh
           cd external/llama.cpp
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=OFF -DLLAMA_OPENSSL=OFF -DGGML_NATIVE=ON
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=OFF -DLLAMA_OPENSSL=OFF -DGGML_NATIVE=OFF  # portable: the cached binary may run on a different runner CPU
           cmake --build build --target llama-server -j "$(nproc)"
       - name: Run eval
         env:
@@ -42,6 +42,7 @@ jobs:
         run: |
           mkdir -p models reports
           port=8091
+          failed=0
           for f in $MODELS; do
             repo=$(echo "$f" | sed -E 's/-(Q[0-9A-Z_]+)\.gguf$//')
             echo "::group::$f"
@@ -49,7 +50,13 @@ jobs:
             ls -lh "models/$f"
             external/llama.cpp/build/bin/llama-server -m "models/$f" -c 4096 -t "$(nproc)" --port $port --jinja > server.log 2>&1 &
             pid=$!
-            for i in $(seq 1 120); do curl -sf http://127.0.0.1:$port/health > /dev/null && break; sleep 2; done
+            healthy=0
+            for i in $(seq 1 150); do curl -sf http://127.0.0.1:$port/health > /dev/null && { healthy=1; break; }; sleep 2; done
+            if [ "$healthy" != 1 ]; then
+              echo "::error::llama-server did not start for $f"; tail -40 server.log
+              echo "## $f: llama-server failed to start" >> $GITHUB_STEP_SUMMARY
+              kill $pid 2>/dev/null || true; rm -f "models/$f"; failed=1; echo "::endgroup::"; port=$((port+1)); continue
+            fi
             name=$(echo "$repo" | sed 's/-/ /')
             python3 eval/run_eval.py $port "$name" "reports/${f%.gguf}.md" || true
             kill $pid || true; wait $pid 2>/dev/null || true
@@ -58,6 +65,7 @@ jobs:
             echo "::endgroup::"
             port=$((port+1))
           done
+          exit $failed
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -54,7 +54,7 @@ def main():
         except Exception as e:  # report, don't hide
             text, tps, secs = f"ERROR: {e}", 0.0, 0.0
         text = text.replace("<think>", "").replace("</think>", "").strip()
-        ok = script_ok(p["lang"], text)
+        ok = (not text.startswith("ERROR:")) and script_ok(p["lang"], text)
         script_pass += ok
         exp = p.get("expect") or ""
         exp_ok = None
