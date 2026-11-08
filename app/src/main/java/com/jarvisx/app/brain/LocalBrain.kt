@@ -140,7 +140,7 @@ class LocalBrain(
     /** True if the context is nearly full; the caller then starts a new conversation. */
     suspend fun contextNearlyFull(nextPromptTokens: Int = 600): Boolean {
         val (used, size) = engine.contextUsage()
-        return ModelSelector.shouldRestartContext(used, size, maxOf(600, nextPromptTokens + 400))
+        return ModelSelector.shouldRestartContext(used, size, maxOf(600, nextPromptTokens))
     }
 
     suspend fun contextUsage(): Pair<Int, Int> = engine.contextUsage()

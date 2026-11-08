@@ -1,5 +1,7 @@
 package com.jarvisx.app.brain
 
+import com.arm.aichat.ContextFullException
+import com.arm.aichat.EndReason
 import com.arm.aichat.GenerationMetrics
 import com.jarvisx.app.Settings
 import com.jarvisx.app.research.WebSearch
@@ -23,6 +25,8 @@ sealed class AssistantEvent {
     data class Searching(val query: String) : AssistantEvent()
     data class Sources(val results: List<SearchResult>) : AssistantEvent()
     data class Token(val piece: String) : AssistantEvent()
+    /** Discard the partial answer shown so far; a retry follows. */
+    object Restart : AssistantEvent()
     data class Notice(val text: String) : AssistantEvent()
     data class Done(val metrics: GenerationMetrics?, val source: String) : AssistantEvent()
     data class Error(val message: String) : AssistantEvent()
@@ -81,18 +85,46 @@ class Assistant(
             is LoadOutcome.Failure -> emit(AssistantEvent.Error(outcome.message))
             is LoadOutcome.Success -> {
                 outcome.note?.let { emit(AssistantEvent.Notice(it)) }
-                if (brain.contextNearlyFull(prompt.length / 3)) {
-                    brain.newConversation()
-                    emit(AssistantEvent.Notice(contextResetNotice(language)))
-                }
                 val think = settings.thinkHarder.value
                 brain.setThinking(think)
+                val maxTokens = if (think) 2048 else 1024
                 val name = outcome.model.displayName + sourceSuffix + if (think) " · thinking" else ""
-                emit(AssistantEvent.ModelStarted(name))
-                brain.generate(prompt, maxTokens = if (think) 2048 else 1024).collect { emit(AssistantEvent.Token(it)) }
-                emit(AssistantEvent.Done(brain.lastMetrics, name))
+                // A fresh context is guaranteed to fit, so at most one retry is ever needed.
+                for (attempt in 1..2) {
+                    if (brain.contextNearlyFull(prompt.length / 3 + maxTokens)) {
+                        brain.newConversation()
+                        emit(AssistantEvent.Notice(contextResetNotice(language)))
+                    }
+                    emit(AssistantEvent.ModelStarted(name))
+                    val full = try {
+                        brain.generate(prompt, maxTokens).collect { emit(AssistantEvent.Token(it)) }
+                        brain.lastMetrics.endReason == EndReason.CONTEXT_FULL
+                    } catch (e: ContextFullException) {
+                        true
+                    }
+                    if (full && attempt == 1) {
+                        emit(AssistantEvent.Restart)
+                        brain.newConversation()
+                        emit(AssistantEvent.Notice(contextResetNotice(language)))
+                        continue
+                    }
+                    when (brain.lastMetrics.endReason) {
+                        EndReason.LENGTH_LIMIT -> emit(AssistantEvent.Notice(cutNotice(language, "it reached the length limit")))
+                        EndReason.DECODE_ERROR -> emit(AssistantEvent.Notice(cutNotice(language, "the engine reported an error")))
+                        EndReason.CONTEXT_FULL -> emit(AssistantEvent.Notice(cutNotice(language, "the memory window is full")))
+                        else -> Unit
+                    }
+                    emit(AssistantEvent.Done(brain.lastMetrics, name))
+                    break
+                }
             }
         }
+    }
+
+    private fun cutNotice(language: ReplyLanguage, why: String) = when (language) {
+        ReplyLanguage.ENGLISH -> "This answer is incomplete: $why."
+        ReplyLanguage.HINGLISH -> "Ye jawab adhoora hai ($why)."
+        ReplyLanguage.HINDI -> "यह जवाब अधूरा है ($why)।"
     }
 
     private fun searchFailedNotice(language: ReplyLanguage, reason: String?) = when (language) {

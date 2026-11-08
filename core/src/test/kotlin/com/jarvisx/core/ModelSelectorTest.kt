@@ -59,13 +59,17 @@ class ModelSelectorTest {
 
     @Test fun contextShrinksWhenRamIsTight() {
         val m4 = ModelCatalog.byId("qwen3.5-4b-q4_k_m")!!
-        assertEquals(4096, ModelSelector.contextSize(m4, phone(12.0, 5700)))
+        assertEquals(8192, ModelSelector.contextSize(m4, phone(12.0, 5700)))
+        assertEquals(4096, ModelSelector.contextSize(m4, phone(12.0, 4500)))
         assertEquals(2048, ModelSelector.contextSize(m4, phone(12.0, 4300)))
     }
 
     @Test fun contextRestartRule() {
         assertFalse(ModelSelector.shouldRestartContext(1000, 4096))
-        assertTrue(ModelSelector.shouldRestartContext(3000, 4096))
+        assertTrue(ModelSelector.shouldRestartContext(3500, 4096))
+        // A turn that may produce 1024 tokens must fit completely before it starts.
+        assertTrue(ModelSelector.shouldRestartContext(3100, 4096, 1100))
+        assertFalse(ModelSelector.shouldRestartContext(3100, 8192, 1100))
     }
 
     @Test fun catalogIsConsistent() {

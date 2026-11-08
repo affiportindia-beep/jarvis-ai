@@ -72,6 +72,10 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                             upsert(ChatMessage(answerId, Role.ASSISTANT, "", source = source, streaming = true))
                         }
                         is AssistantEvent.Sources -> sources = e.results
+                        AssistantEvent.Restart -> {
+                            buffer.clear()
+                            upsert(ChatMessage(answerId, Role.ASSISTANT, "", source = source, streaming = true, sources = sources))
+                        }
                         is AssistantEvent.ModelStarted -> {
                             source = e.modelName
                             upsert(ChatMessage(answerId, Role.ASSISTANT, "", source = source, streaming = true, sources = sources))

@@ -74,13 +74,23 @@ object ModelSelector {
         }
     }
 
-    /** 4096 tokens when RAM allows, else 2048. */
+    /**
+     * 8192 tokens when RAM allows, else 4096, else 2048. Qwen3.5 keeps full attention in only a
+     * quarter of its layers, so a bigger window costs little RAM and fits much longer chats.
+     */
     fun contextSize(model: ModelSpec, profile: DeviceProfile): Int {
         val spare = profile.availableRamMb - model.ramRequiredMb - SAFETY_MARGIN_MB
-        return if (spare >= 700) 4096 else 2048
+        return when {
+            spare >= 800 -> 8192
+            spare >= 300 -> 4096
+            else -> 2048
+        }
     }
 
-    /** True when the conversation has filled most of the context and should restart. */
-    fun shouldRestartContext(used: Int, size: Int, nextPromptEstimate: Int = 600): Boolean =
-        size > 0 && used + nextPromptEstimate >= (size * 0.85).toInt()
+    /**
+     * True when the next turn (prompt + longest possible answer) might not fit. Recurrent
+     * models cannot drop old tokens, so the conversation restarts before that happens.
+     */
+    fun shouldRestartContext(used: Int, size: Int, nextTurnTokens: Int = 600): Boolean =
+        size > 0 && used + nextTurnTokens >= size - 64
 }

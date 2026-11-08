@@ -5,6 +5,8 @@ package com.arm.aichat.internal
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
+import com.arm.aichat.ContextFullException
+import com.arm.aichat.EndReason
 import com.arm.aichat.GenerationMetrics
 import com.arm.aichat.InferenceEngine
 import com.arm.aichat.UnsupportedArchitectureException
@@ -72,6 +74,7 @@ internal class InferenceEngineImpl private constructor(
     private external fun contextSize(): Int
     private external fun finishPartialAssistant(): Int
     private external fun setThinking(enabled: Boolean)
+    private external fun lastEndReason(): Int
     private external fun unload()
     private external fun shutdown()
 
@@ -189,6 +192,10 @@ internal class InferenceEngineImpl private constructor(
             _state.value = InferenceEngine.State.ProcessingUserPrompt
             val before = contextUsed()
             val result = processUserPrompt(message, predictLength)
+            if (result == 3) {
+                _state.value = InferenceEngine.State.ModelReady
+                throw ContextFullException()
+            }
             if (result != 0) throw IOException("Failed to process prompt (code $result)")
             val prefillEnd = SystemClock.elapsedRealtime()
             val promptTokens = contextUsed() - before
@@ -209,9 +216,17 @@ internal class InferenceEngineImpl private constructor(
                 firstTokenMs = firstTokenMs,
                 generationMs = SystemClock.elapsedRealtime() - prefillEnd,
                 stoppedByUser = stopped,
+                endReason = if (stopped) EndReason.STOPPED_BY_USER else when (lastEndReason()) {
+                    1 -> EndReason.LENGTH_LIMIT
+                    2 -> EndReason.DECODE_ERROR
+                    3 -> EndReason.CONTEXT_FULL
+                    else -> EndReason.END_OF_TURN
+                },
             )
             cancelRequested = false
             _state.value = InferenceEngine.State.ModelReady
+        } catch (e: ContextFullException) {
+            throw e
         } catch (e: CancellationException) {
             // Collector went away (e.g. screen closed): keep the native chat state consistent.
             if (_state.value is InferenceEngine.State.Generating) finishPartialAssistant()

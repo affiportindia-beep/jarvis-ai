@@ -91,12 +91,19 @@ data class GenerationMetrics(
     val firstTokenMs: Long = 0,
     val generationMs: Long = 0,
     val stoppedByUser: Boolean = false,
+    val endReason: EndReason = EndReason.END_OF_TURN,
 ) {
     val tokensPerSecond: Double
         get() = if (generationMs > 0) generatedTokens * 1000.0 / generationMs else 0.0
     val prefillTokensPerSecond: Double
         get() = if (prefillMs > 0) promptTokens * 1000.0 / prefillMs else 0.0
 }
+
+/** Why a generation ended. Anything but END_OF_TURN means the answer may be incomplete. */
+enum class EndReason { END_OF_TURN, LENGTH_LIMIT, DECODE_ERROR, CONTEXT_FULL, STOPPED_BY_USER }
+
+/** The conversation filled the model's context window; start a new context and retry. */
+class ContextFullException : Exception("The conversation filled the model's memory window")
 
 val State.isUninterruptible
     get() = this is State.Initializing ||

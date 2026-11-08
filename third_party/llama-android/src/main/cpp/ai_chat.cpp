@@ -50,6 +50,10 @@ static common_sampler                   * g_sampler;
 static int                                g_n_ctx = DEFAULT_CONTEXT_SIZE;
 // JARVIS X: "Think harder" lets Qwen3.5 reason in a <think> block before answering.
 static bool                               g_allow_thinking = false;
+// JARVIS X: why the last generation ended. 0 = end of turn, 1 = length budget,
+// 2 = decode error, 3 = context full (recurrent models cannot shift context).
+static int                                g_end_reason = 0;
+constexpr int END_EOG = 0, END_LENGTH = 1, END_DECODE_ERROR = 2, END_CONTEXT_FULL = 3;
 
 // True for hybrid SSM+attention models (e.g. Qwen3.5) that use M-RoPE and
 // cannot rewind the recurrent memory state to an earlier position.
@@ -470,6 +474,11 @@ static int decode_tokens_in_batches(
 
         // Shift context if current batch cannot fit into the context
         if (start_pos + i + cur_batch_size >= g_n_ctx - OVERFLOW_HEADROOM) {
+            if (g_model_has_mrope) {
+                // JARVIS X: recurrent (Qwen3.5) memory cannot be shifted; report instead of corrupting it.
+                LOGw("%s: context full for recurrent model", __func__);
+                return END_CONTEXT_FULL;
+            }
             LOGw("%s: Current batch won't fit into context! Shifting...", __func__);
             shift_context();
         }
@@ -611,6 +620,7 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_processUserPrompt(
 ) {
     // Reset short-term states
     reset_short_term_states();
+    g_end_reason = END_EOG;
 
     // Obtain and tokenize user prompt
     const auto *const user_prompt = env->GetStringUTFChars(juser_prompt, nullptr);
@@ -678,9 +688,13 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_processUserPrompt(
     }
 
     // Decode user tokens in batches
-    if (decode_tokens_in_batches(g_context, g_batch, user_tokens, current_position, true)) {
-        LOGe("%s: llama_decode() failed!", __func__);
-        return 2;
+    {
+        const int rc = decode_tokens_in_batches(g_context, g_batch, user_tokens, current_position, true);
+        if (rc == END_CONTEXT_FULL) { g_end_reason = END_CONTEXT_FULL; return END_CONTEXT_FULL; }
+        if (rc) {
+            LOGe("%s: llama_decode() failed!", __func__);
+            return 2;
+        }
     }
 
     // Update position
@@ -733,6 +747,10 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_generateNextToken(
 ) {
     // Infinite text generation via context shifting
     if (current_position >= g_n_ctx - OVERFLOW_HEADROOM) {
+        if (g_model_has_mrope) {
+            g_end_reason = END_CONTEXT_FULL;  // JARVIS X: never shift recurrent memory
+            return nullptr;
+        }
         LOGw("%s: Context full! Shifting...", __func__);
         shift_context();
     }
@@ -740,6 +758,7 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_generateNextToken(
     // Stop if reaching the marked position
     if (current_position >= stop_generation_position) {
         LOGw("%s: STOP: hitting stop position: %d", __func__, stop_generation_position);
+        g_end_reason = END_LENGTH;
         return nullptr;
     }
 
@@ -752,6 +771,7 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_generateNextToken(
     common_batch_add(g_batch, new_token_id, current_position, {0}, true);
     if (llama_decode(g_context, g_batch) != 0) {
         LOGe("%s: llama_decode() failed for generated token", __func__);
+        g_end_reason = END_DECODE_ERROR;
         return nullptr;
     }
 
@@ -788,6 +808,13 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_generateNextToken(
 // ---------------------------------------------------------------------------
 // JARVIS X additions
 // ---------------------------------------------------------------------------
+
+// Why the last generation ended (see END_* constants).
+extern "C"
+JNIEXPORT jint JNICALL
+Java_com_arm_aichat_internal_InferenceEngineImpl_lastEndReason(JNIEnv * /*env*/, jobject /*unused*/) {
+    return (jint) g_end_reason;
+}
 
 // Enables or disables the reasoning block for the next user prompts.
 extern "C"
