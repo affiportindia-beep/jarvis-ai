@@ -1,7 +1,7 @@
+// Modified by JARVIS X (2026). See third_party/microwakeword/MODIFICATIONS.md.
 package com.example.ava.wakewords.microwakeword
 
 import org.tensorflow.lite.Interpreter
-import timber.log.Timber
 import java.nio.ByteBuffer
 
 class MicroWakeWordModel(
@@ -15,6 +15,16 @@ class MicroWakeWordModel(
     private val outputScale: Float
     private val outputZeroPoint: Int
     private val probabilities = ArrayDeque<Float>(slidingWindowSize)
+
+    /** Latest raw probability, for the diagnostics screen. */
+    @Volatile var lastProbability: Float = 0f
+        private set
+
+    /** Forget recent audio, e.g. after the wake word fired, so it does not fire twice. */
+    fun reset() {
+        probabilities.clear()
+        inputTensorBuffer.clear()
+    }
 
     init {
         interpreter.allocateTensors()
@@ -56,9 +66,7 @@ class MicroWakeWordModel(
     }
 
     private fun isWakeWordDetected(probability: Float): Boolean {
-        if (probability > 0.3)
-            Timber.d("Probability: $probability")
-
+        lastProbability = probability
         if (probabilities.size == slidingWindowSize)
             probabilities.removeFirst()
         probabilities.add(probability)

@@ -36,6 +36,18 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent { JarvisTheme { Root() } }
     }
+
+    override fun onResume() {
+        super.onResume()
+        // Android only lets a microphone service start while the app is on screen, so "Hey Jarvis"
+        // is (re)started here, e.g. after a phone restart.
+        val graph = (application as JarvisApp).graph
+        if (graph.settings.wakeWord.value &&
+            checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            runCatching { com.jarvisx.app.voice.WakeWordService.start(this) }
+        }
+    }
 }
 
 private data class Tab(val label: String, val icon: ImageVector)

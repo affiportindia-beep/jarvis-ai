@@ -14,6 +14,18 @@ This product includes software developed by others:
 - llama.cpp (https://github.com/ggml-org/llama.cpp), Copyright (c) 2023-2026 The ggml
   authors, MIT License. Downloaded at build time at the tag in scripts/llama_cpp_tag.txt.
 
+- third_party/microwakeword: derived from brownard/Ava (https://github.com/brownard/Ava),
+  Apache License 2.0, modified by JARVIS X (see its MODIFICATIONS.md). It bundles the
+  TensorFlow Lite Micro audio frontend (Copyright 2018 The TensorFlow Authors, Apache 2.0)
+  and KISS FFT (Copyright (c) 2003-2010 Mark Borgerding, BSD 3-Clause License; redistribution
+  in binary form must reproduce that copyright notice, this condition list and disclaimer,
+  which are in third_party/microwakeword/src/main/cpp/kissfft/kiss_fft.c).
+
+- app/src/main/assets/wake/hey_jarvis.tflite: ESPHome micro_wake_word model collection,
+  Copyright 2024-2026 Open Home Foundation, Apache License 2.0 (weights included).
+
+- LiteRT (formerly TensorFlow Lite), Copyright Google LLC, Apache License 2.0.
+
 - Gradle Wrapper files, Copyright Gradle, Inc., Apache License 2.0.
 
 Model files are not distributed with this product. The user downloads them from Hugging Face

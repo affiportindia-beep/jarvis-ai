@@ -37,4 +37,5 @@ class AppGraph(app: Application) {
     val benchmark = BenchmarkRunner(app, brain, profiler, modelStore)
     val voiceInput = VoiceInput(app)
     val voiceOutput = VoiceOutput(app)
+    val session = com.jarvisx.app.brain.ChatSession(this)
 }

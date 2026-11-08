@@ -26,6 +26,9 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.AddComment
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.outlined.VolumeOff
+import androidx.compose.material.icons.outlined.Hearing
+import androidx.compose.material.icons.outlined.HearingDisabled
+import android.provider.Settings as AndroidSettings
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -60,6 +63,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jarvisx.app.brain.BrainStatus
+import com.jarvisx.app.brain.ChatMessage
+import com.jarvisx.app.brain.Role
 import com.jarvisx.app.ui.common.CoreOrb
 import com.jarvisx.app.ui.common.markdownLite
 import com.jarvisx.app.ui.theme.Jx
@@ -74,8 +79,20 @@ fun ChatScreen(onOpenModels: () -> Unit, vm: ChatViewModel = viewModel()) {
         if (state.messages.isNotEmpty()) listState.animateScrollToItem(state.messages.size - 1)
     }
 
+    val ctx = LocalContext.current
+    val wakeMicPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) vm.toggleWake()
+    }
+    val onToggleWake: () -> Unit = {
+        if (state.wakeWord || ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            vm.toggleWake()
+        } else {
+            wakeMicPermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
     Column(Modifier.fillMaxSize().imePadding()) {
-        Header(state, onNewChat = vm::newChat, onToggleOnline = vm::toggleOnline, onToggleThink = vm::toggleThink)
+        Header(state, onNewChat = vm::newChat, onToggleOnline = vm::toggleOnline, onToggleThink = vm::toggleThink, onToggleWake = onToggleWake)
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (state.messages.isEmpty()) {
                 EmptyState(state.brain, onOpenModels)
@@ -120,6 +137,29 @@ fun ChatScreen(onOpenModels: () -> Unit, vm: ChatViewModel = viewModel()) {
             onToggleLanguage = vm::toggleVoiceLanguage,
         )
     }
+    if (state.showWakeExplainer) {
+        AlertDialog(
+            onDismissRequest = { vm.confirmWake(false) },
+            title = { Text("Turn on \"Hey Jarvis\"?") },
+            text = {
+                Text(
+                    "JARVIS X will listen for \"Hey Jarvis\" with a tiny model on this phone. Nothing is recorded or sent. " +
+                        "A notification stays visible and Android shows the microphone indicator while it listens.\n\n" +
+                        "It uses some battery. Samsung phones may stop it in the background: if that happens, set JARVIS X to " +
+                        "\"Unrestricted\" in battery settings (button below). After a restart, open JARVIS X once to switch it back on."
+                )
+            },
+            confirmButton = { TextButton(onClick = { vm.confirmWake(true) }) { Text("Turn on", color = Jx.Accent) } },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        runCatching { ctx.startActivity(Intent(AndroidSettings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+                    }) { Text("Battery settings") }
+                    TextButton(onClick = { vm.confirmWake(false) }) { Text("Cancel") }
+                }
+            },
+        )
+    }
     if (state.showOnlineExplainer) {
         AlertDialog(
             onDismissRequest = { vm.confirmOnline(false) },
@@ -139,7 +179,7 @@ fun ChatScreen(onOpenModels: () -> Unit, vm: ChatViewModel = viewModel()) {
 }
 
 @Composable
-private fun Header(state: ChatUiState, onNewChat: () -> Unit, onToggleOnline: () -> Unit, onToggleThink: () -> Unit) {
+private fun Header(state: ChatUiState, onNewChat: () -> Unit, onToggleOnline: () -> Unit, onToggleThink: () -> Unit, onToggleWake: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -150,6 +190,13 @@ private fun Header(state: ChatUiState, onNewChat: () -> Unit, onToggleOnline: ()
             Text(
                 statusLine(state.brain).replace("OFFLINE", if (state.onlineSearch) "SEARCH ON" else "OFFLINE"),
                 style = MaterialTheme.typography.labelSmall, color = Jx.TextDim,
+            )
+        }
+        IconButton(onClick = onToggleWake) {
+            Icon(
+                if (state.wakeWord) Icons.Outlined.Hearing else Icons.Outlined.HearingDisabled,
+                contentDescription = if (state.wakeWord) "Hey Jarvis on" else "Hey Jarvis off",
+                tint = if (state.wakeWord) Jx.Accent else Jx.TextDim,
             )
         }
         IconButton(onClick = onToggleThink, enabled = !state.busy) {

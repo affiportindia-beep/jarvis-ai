@@ -9,6 +9,8 @@
     <!-- Voice input. The microphone is used only while the mic button shows "Listening",
          and speech is recognised on the phone (on-device recogniser only). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- "Hey Jarvis" (optional, off by default): visible foreground service of type microphone. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <!-- Keeps a large model download alive with a visible notification. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -52,5 +54,9 @@
             android:name=".models.ModelDownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+        <service
+            android:name=".voice.WakeWordService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
     </application>
 </manifest>

@@ -26,6 +26,11 @@ private val credits = listOf(
     Credit("llama.cpp Android example (ggml authors)", "MIT", "Origin of the JNI bridge"),
     Credit("Qwen3.5 models (Alibaba Qwen team)", "Apache-2.0", "Downloaded by you; not bundled"),
     Credit("GGUF conversions (Unsloth)", "Apache-2.0 (inherits Qwen)", "Quantised model files"),
+    Credit("microWakeWord detector (brownard/Ava)", "Apache-2.0", "\"Hey Jarvis\" detection, modified by JARVIS X"),
+    Credit("Hey Jarvis model (ESPHome / Open Home Foundation)", "Apache-2.0", "Wake-word model"),
+    Credit("TensorFlow Lite Micro audio frontend", "Apache-2.0", "Wake-word audio features"),
+    Credit("KISS FFT © 2003-2010 Mark Borgerding", "BSD-3-Clause", "FFT for wake-word audio"),
+    Credit("LiteRT (Google)", "Apache-2.0", "Runs the wake-word model"),
     Credit("Android Jetpack / Compose", "Apache-2.0", "User interface"),
     Credit("Kotlin, kotlinx.coroutines", "Apache-2.0", "Language and concurrency"),
 )

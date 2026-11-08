@@ -1,6 +1,6 @@
+// Modified by JARVIS X (2026). See third_party/microwakeword/MODIFICATIONS.md.
 package com.example.ava.wakewords.microwakeword
 
-import com.example.ava.utils.fillFrom
 import com.example.microfeatures.MicroFrontend
 import java.nio.ByteBuffer
 
@@ -34,9 +34,31 @@ class MicroWakeWordDetector(private val wakeWords: List<MicroWakeWordModel>) : A
         buffer.compact()
     }
 
+    /** JARVIS X: clears every model's recent-audio window, e.g. after a detection. */
+    fun reset() {
+        wakeWords.forEach { it.reset() }
+    }
+
     override fun close() {
         frontend.close()
         for (model in wakeWords)
             model.close()
+    }
+}
+
+/** Copied from Ava `utils/BufferUtils.kt` (Apache-2.0): copies as much of [src] as fits. */
+internal fun ByteBuffer.fillFrom(src: ByteBuffer): Int {
+    val remaining = remaining()
+    if (remaining == 0) return 0
+    val srcRemaining = src.remaining()
+    return if (srcRemaining <= remaining) {
+        put(src)
+        srcRemaining
+    } else {
+        val currentLimit = src.limit()
+        src.limit(src.position() + remaining)
+        put(src)
+        src.limit(currentLimit)
+        remaining
     }
 }

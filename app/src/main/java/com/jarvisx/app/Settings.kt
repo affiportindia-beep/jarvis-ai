@@ -36,6 +36,15 @@ class Settings(context: Context) {
         _voiceLanguage.value = tag
     }
 
+    private val _wakeWord = MutableStateFlow(prefs.getBoolean(KEY_WAKE, false))
+    /** "Hey Jarvis" listening in a visible foreground service. OFF by default (uses battery). */
+    val wakeWord: StateFlow<Boolean> = _wakeWord.asStateFlow()
+
+    fun setWakeWord(on: Boolean) {
+        prefs.edit().putBoolean(KEY_WAKE, on).apply()
+        _wakeWord.value = on
+    }
+
     var onlineSearchExplained: Boolean
         get() = prefs.getBoolean(KEY_EXPLAINED, false)
         set(v) { prefs.edit().putBoolean(KEY_EXPLAINED, v).apply() }
@@ -45,5 +54,6 @@ class Settings(context: Context) {
         const val KEY_EXPLAINED = "online_search_explained"
         const val KEY_THINK = "think_harder"
         const val KEY_VOICE_LANG = "voice_language"
+        const val KEY_WAKE = "wake_word"
     }
 }

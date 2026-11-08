@@ -23,3 +23,4 @@ rootProject.name = "JarvisX"
 include(":app")
 include(":core")
 include(":third_party:llama-android")
+include(":third_party:microwakeword")

@@ -106,6 +106,7 @@ fun DiagnosticsScreen(vm: DiagnosticsViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
     val brain by vm.brain.collectAsStateWithLifecycle()
     val online by vm.online.collectAsStateWithLifecycle()
+    val wakeStatus by com.jarvisx.app.voice.WakeWordService.status.collectAsStateWithLifecycle()
     val context = LocalContext.current
     LaunchedEffect(Unit) { vm.refreshLoop() }
 
@@ -123,6 +124,7 @@ fun DiagnosticsScreen(vm: DiagnosticsViewModel = viewModel()) {
             KeyValue("Online search", if (online) "ON · sends only search words to news.google.com and wikipedia.org" else "OFF")
             KeyValue("Microphone", "only while the mic shows Listening; speech recognised on the phone")
             KeyValue("Voice output", "Android offline voices only")
+            KeyValue("Hey Jarvis", wakeStatus)
         }
 
         state.profile?.let { p ->

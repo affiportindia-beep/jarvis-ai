@@ -4,31 +4,14 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.jarvisx.app.JarvisApp
-import com.jarvisx.app.brain.AssistantEvent
 import com.jarvisx.app.brain.BrainStatus
-import com.jarvisx.core.research.SearchResult
+import com.jarvisx.app.brain.ChatMessage
 import com.jarvisx.app.voice.ListenState
-import com.jarvisx.core.lang.LanguageDetector
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-
-enum class Role { USER, ASSISTANT, NOTICE }
-
-data class ChatMessage(
-    val id: Long,
-    val role: Role,
-    val text: String,
-    /** Where the answer came from: a tool id or a model name. */
-    val source: String? = null,
-    val stats: String? = null,
-    val isError: Boolean = false,
-    val streaming: Boolean = false,
-    val sources: List<SearchResult> = emptyList(),
-)
 
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
@@ -40,101 +23,38 @@ data class ChatUiState(
     val listen: ListenState = ListenState.Idle,
     val voiceLanguage: String = "hi-IN",
     val speaking: Boolean = false,
+    val wakeWord: Boolean = false,
+    val showWakeExplainer: Boolean = false,
 )
 
+/** UI state for the chat screen; the conversation itself lives in [com.jarvisx.app.brain.ChatSession]. */
 class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private val graph = (app as JarvisApp).graph
+    private val session = graph.session
     private val _state = MutableStateFlow(ChatUiState())
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
-    private var job: Job? = null
-    private var nextId = 1L
 
     init {
+        viewModelScope.launch { session.messages.collect { m -> _state.update { it.copy(messages = m) } } }
+        viewModelScope.launch { session.busy.collect { b -> _state.update { it.copy(busy = b) } } }
         viewModelScope.launch { graph.brain.status.collect { s -> _state.update { it.copy(brain = s) } } }
         viewModelScope.launch { graph.settings.onlineSearch.collect { on -> _state.update { it.copy(onlineSearch = on) } } }
         viewModelScope.launch { graph.settings.thinkHarder.collect { on -> _state.update { it.copy(thinkHarder = on) } } }
         viewModelScope.launch { graph.voiceInput.state.collect { l -> _state.update { it.copy(listen = l) } } }
         viewModelScope.launch { graph.settings.voiceLanguage.collect { v -> _state.update { it.copy(voiceLanguage = v) } } }
         viewModelScope.launch { graph.voiceOutput.speaking.collect { sp -> _state.update { it.copy(speaking = sp) } } }
+        viewModelScope.launch { graph.settings.wakeWord.collect { w -> _state.update { it.copy(wakeWord = w) } } }
     }
 
-    fun send(text: String, viaVoice: Boolean = false) {
-        val trimmed = text.trim()
-        if (trimmed.isEmpty() || _state.value.busy) return
-        add(ChatMessage(nextId++, Role.USER, trimmed))
-        val answerId = nextId++
-        _state.update { it.copy(busy = true) }
-        val speak = viaVoice
-        if (speak) graph.voiceOutput.begin(LanguageDetector.detect(trimmed))
-        job = viewModelScope.launch {
-            val buffer = StringBuilder()
-            var source: String? = null
-            var sources: List<SearchResult> = emptyList()
-            try {
-                graph.assistant.respond(trimmed).collect { e ->
-                    when (e) {
-                        is AssistantEvent.ToolAnswer -> {
-                            if (speak) graph.voiceOutput.finish(e.text)
-                            source = toolLabel(e.toolId)
-                            upsert(ChatMessage(answerId, Role.ASSISTANT, e.text, source = source))
-                        }
-                        is AssistantEvent.Searching -> {
-                            source = "Searching the web for \"${e.query}\"…"
-                            upsert(ChatMessage(answerId, Role.ASSISTANT, "", source = source, streaming = true))
-                        }
-                        is AssistantEvent.Sources -> sources = e.results
-                        AssistantEvent.Restart -> {
-                            buffer.clear()
-                            if (speak) graph.voiceOutput.begin(LanguageDetector.detect(trimmed))
-                            upsert(ChatMessage(answerId, Role.ASSISTANT, "", source = source, streaming = true, sources = sources))
-                        }
-                        is AssistantEvent.ModelStarted -> {
-                            source = e.modelName
-                            upsert(ChatMessage(answerId, Role.ASSISTANT, "", source = source, streaming = true, sources = sources))
-                        }
-                        is AssistantEvent.Token -> {
-                            buffer.append(e.piece)
-                            if (speak) graph.voiceOutput.feed(buffer.toString())
-                            upsert(ChatMessage(answerId, Role.ASSISTANT, buffer.toString(), source = source, streaming = true, sources = sources))
-                        }
-                        is AssistantEvent.Notice -> add(ChatMessage(nextId++, Role.NOTICE, e.text))
-                        is AssistantEvent.Error -> add(ChatMessage(nextId++, Role.NOTICE, e.message, isError = true))
-                        is AssistantEvent.Done -> {
-                            val m = e.metrics
-                            val stats = m?.let {
-                                val stopped = if (it.stoppedByUser) " · stopped" else ""
-                                "%.1f tok/s · %d tokens · first token %.1f s%s".format(
-                                    it.tokensPerSecond, it.generatedTokens, it.firstTokenMs / 1000.0, stopped,
-                                )
-                            }
-                            if (speak && m != null) graph.voiceOutput.finish(buffer.toString())
-                            if (m != null) {
-                                upsert(ChatMessage(answerId, Role.ASSISTANT, buffer.toString().ifBlank { "(no answer)" }, source = source, stats = stats, sources = sources))
-                            }
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                add(ChatMessage(nextId++, Role.NOTICE, "Something went wrong: ${e.message ?: e.javaClass.simpleName}", isError = true))
-            } finally {
-                // If generation ended without Done (stop/cancel), make sure nothing stays "streaming".
-                _state.update { st ->
-                    st.copy(busy = false, messages = st.messages.map { if (it.streaming) it.copy(streaming = false) else it })
-                }
-            }
-        }
-    }
-
-    fun stop() {
-        graph.brain.stop()
-        graph.voiceOutput.stop()
-    }
+    fun send(text: String) { session.send(text) }
+    fun stop() = session.stop()
+    fun newChat() = session.newChat()
 
     // ---- voice ----
     fun startListening() {
         if (_state.value.busy) return
         graph.voiceOutput.stop()
-        graph.voiceInput.start(_state.value.voiceLanguage) { text -> send(text, viaVoice = true) }
+        graph.voiceInput.start(_state.value.voiceLanguage) { text -> session.send(text, viaVoice = true) }
     }
 
     fun stopListening() = graph.voiceInput.stop()
@@ -144,9 +64,22 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleVoiceLanguage() =
         graph.settings.setVoiceLanguage(if (_state.value.voiceLanguage == "hi-IN") "en-IN" else "hi-IN")
 
-    override fun onCleared() {
-        graph.voiceInput.stop()
-        super.onCleared()
+    /** "Hey Jarvis": first switch-on explains battery use and the notification. */
+    fun toggleWake() {
+        if (_state.value.wakeWord) {
+            graph.settings.setWakeWord(false)
+            com.jarvisx.app.voice.WakeWordService.stop(getApplication())
+        } else {
+            _state.update { it.copy(showWakeExplainer = true) }
+        }
+    }
+
+    fun confirmWake(enable: Boolean) {
+        _state.update { it.copy(showWakeExplainer = false) }
+        if (enable) {
+            graph.settings.setWakeWord(true)
+            com.jarvisx.app.voice.WakeWordService.start(getApplication())
+        }
     }
 
     fun toggleThink() = graph.settings.setThinkHarder(!_state.value.thinkHarder)
@@ -167,24 +100,5 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             graph.settings.onlineSearchExplained = true
             graph.settings.setOnlineSearch(true)
         }
-    }
-
-    fun newChat() {
-        if (_state.value.busy) return
-        _state.update { it.copy(messages = emptyList()) }
-        viewModelScope.launch { runCatching { graph.brain.newConversation() } }
-    }
-
-    private fun toolLabel(id: String) = when (id) {
-        "calculator" -> "Calculator"
-        "datetime" -> "Phone clock"
-        else -> id
-    }
-
-    private fun add(m: ChatMessage) = _state.update { it.copy(messages = it.messages + m) }
-
-    private fun upsert(m: ChatMessage) = _state.update { st ->
-        val idx = st.messages.indexOfFirst { it.id == m.id }
-        st.copy(messages = if (idx < 0) st.messages + m else st.messages.toMutableList().also { it[idx] = m })
     }
 }
