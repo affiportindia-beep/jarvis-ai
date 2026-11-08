@@ -7,6 +7,8 @@ import com.jarvisx.app.JarvisApp
 import com.jarvisx.app.brain.AssistantEvent
 import com.jarvisx.app.brain.BrainStatus
 import com.jarvisx.core.research.SearchResult
+import com.jarvisx.app.voice.ListenState
+import com.jarvisx.core.lang.LanguageDetector
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,6 +37,9 @@ data class ChatUiState(
     val onlineSearch: Boolean = false,
     val thinkHarder: Boolean = false,
     val showOnlineExplainer: Boolean = false,
+    val listen: ListenState = ListenState.Idle,
+    val voiceLanguage: String = "hi-IN",
+    val speaking: Boolean = false,
 )
 
 class ChatViewModel(app: Application) : AndroidViewModel(app) {
@@ -48,14 +53,19 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { graph.brain.status.collect { s -> _state.update { it.copy(brain = s) } } }
         viewModelScope.launch { graph.settings.onlineSearch.collect { on -> _state.update { it.copy(onlineSearch = on) } } }
         viewModelScope.launch { graph.settings.thinkHarder.collect { on -> _state.update { it.copy(thinkHarder = on) } } }
+        viewModelScope.launch { graph.voiceInput.state.collect { l -> _state.update { it.copy(listen = l) } } }
+        viewModelScope.launch { graph.settings.voiceLanguage.collect { v -> _state.update { it.copy(voiceLanguage = v) } } }
+        viewModelScope.launch { graph.voiceOutput.speaking.collect { sp -> _state.update { it.copy(speaking = sp) } } }
     }
 
-    fun send(text: String) {
+    fun send(text: String, viaVoice: Boolean = false) {
         val trimmed = text.trim()
         if (trimmed.isEmpty() || _state.value.busy) return
         add(ChatMessage(nextId++, Role.USER, trimmed))
         val answerId = nextId++
         _state.update { it.copy(busy = true) }
+        val speak = viaVoice
+        if (speak) graph.voiceOutput.begin(LanguageDetector.detect(trimmed))
         job = viewModelScope.launch {
             val buffer = StringBuilder()
             var source: String? = null
@@ -64,6 +74,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 graph.assistant.respond(trimmed).collect { e ->
                     when (e) {
                         is AssistantEvent.ToolAnswer -> {
+                            if (speak) graph.voiceOutput.finish(e.text)
                             source = toolLabel(e.toolId)
                             upsert(ChatMessage(answerId, Role.ASSISTANT, e.text, source = source))
                         }
@@ -74,6 +85,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                         is AssistantEvent.Sources -> sources = e.results
                         AssistantEvent.Restart -> {
                             buffer.clear()
+                            if (speak) graph.voiceOutput.begin(LanguageDetector.detect(trimmed))
                             upsert(ChatMessage(answerId, Role.ASSISTANT, "", source = source, streaming = true, sources = sources))
                         }
                         is AssistantEvent.ModelStarted -> {
@@ -82,6 +94,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                         }
                         is AssistantEvent.Token -> {
                             buffer.append(e.piece)
+                            if (speak) graph.voiceOutput.feed(buffer.toString())
                             upsert(ChatMessage(answerId, Role.ASSISTANT, buffer.toString(), source = source, streaming = true, sources = sources))
                         }
                         is AssistantEvent.Notice -> add(ChatMessage(nextId++, Role.NOTICE, e.text))
@@ -94,6 +107,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                                     it.tokensPerSecond, it.generatedTokens, it.firstTokenMs / 1000.0, stopped,
                                 )
                             }
+                            if (speak && m != null) graph.voiceOutput.finish(buffer.toString())
                             if (m != null) {
                                 upsert(ChatMessage(answerId, Role.ASSISTANT, buffer.toString().ifBlank { "(no answer)" }, source = source, stats = stats, sources = sources))
                             }
@@ -111,7 +125,29 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun stop() = graph.brain.stop()
+    fun stop() {
+        graph.brain.stop()
+        graph.voiceOutput.stop()
+    }
+
+    // ---- voice ----
+    fun startListening() {
+        if (_state.value.busy) return
+        graph.voiceOutput.stop()
+        graph.voiceInput.start(_state.value.voiceLanguage) { text -> send(text, viaVoice = true) }
+    }
+
+    fun stopListening() = graph.voiceInput.stop()
+    fun stopSpeaking() = graph.voiceOutput.stop()
+    fun dismissVoiceMessage() = graph.voiceInput.clearMessage()
+    fun downloadSpeechPack() = graph.voiceInput.downloadLanguagePack(_state.value.voiceLanguage)
+    fun toggleVoiceLanguage() =
+        graph.settings.setVoiceLanguage(if (_state.value.voiceLanguage == "hi-IN") "en-IN" else "hi-IN")
+
+    override fun onCleared() {
+        graph.voiceInput.stop()
+        super.onCleared()
+    }
 
     fun toggleThink() = graph.settings.setThinkHarder(!_state.value.thinkHarder)
 

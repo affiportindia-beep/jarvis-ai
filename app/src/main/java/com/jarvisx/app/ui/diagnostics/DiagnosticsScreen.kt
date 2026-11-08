@@ -121,7 +121,8 @@ fun DiagnosticsScreen(vm: DiagnosticsViewModel = viewModel()) {
             KeyValue("Cloud AI / API keys", "none — not present in the app")
             KeyValue("Network use", "model downloads when you tap Download; optional search when the globe is on")
             KeyValue("Online search", if (online) "ON · sends only search words to news.google.com and wikipedia.org" else "OFF")
-            KeyValue("Microphone", "not used in this version")
+            KeyValue("Microphone", "only while the mic shows Listening; speech recognised on the phone")
+            KeyValue("Voice output", "Android offline voices only")
         }
 
         state.profile?.let { p ->

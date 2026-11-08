@@ -7,6 +7,8 @@ import com.jarvisx.app.brain.LocalBrain
 import com.jarvisx.app.device.HardwareProfiler
 import com.jarvisx.app.models.ModelStore
 import com.jarvisx.app.research.WebSearch
+import com.jarvisx.app.voice.VoiceInput
+import com.jarvisx.app.voice.VoiceOutput
 import com.jarvisx.core.router.Router
 import com.jarvisx.core.tools.CalculatorTool
 import com.jarvisx.core.tools.DateTimeTool
@@ -33,4 +35,6 @@ class AppGraph(app: Application) {
     val brain = LocalBrain(app, profiler, modelStore)
     val assistant = Assistant(router, brain, webSearch, settings)
     val benchmark = BenchmarkRunner(app, brain, profiler, modelStore)
+    val voiceInput = VoiceInput(app)
+    val voiceOutput = VoiceOutput(app)
 }

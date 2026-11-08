@@ -24,6 +24,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.AddComment
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.outlined.VolumeOff
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import com.jarvisx.app.voice.ListenState
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.PublicOff
@@ -83,12 +91,33 @@ fun ChatScreen(onOpenModels: () -> Unit, vm: ChatViewModel = viewModel()) {
                 }
             }
         }
+        VoiceBar(
+            state = state,
+            onStopListening = vm::stopListening,
+            onStopSpeaking = vm::stopSpeaking,
+            onDismiss = vm::dismissVoiceMessage,
+            onDownload = vm::downloadSpeechPack,
+        )
+        val context = LocalContext.current
+        val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) vm.startListening()
+        }
         InputBar(
             value = input,
             onChange = { input = it },
             busy = state.busy,
+            listening = state.listen is ListenState.Listening || state.listen is ListenState.Partial,
+            voiceLanguage = state.voiceLanguage,
             onSend = { vm.send(input); input = "" },
             onStop = vm::stop,
+            onMic = {
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                    vm.startListening()
+                } else {
+                    micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                }
+            },
+            onToggleLanguage = vm::toggleVoiceLanguage,
         )
     }
     if (state.showOnlineExplainer) {
@@ -237,7 +266,17 @@ private fun Bubble(m: ChatMessage) {
 }
 
 @Composable
-private fun InputBar(value: String, onChange: (String) -> Unit, busy: Boolean, onSend: () -> Unit, onStop: () -> Unit) {
+private fun InputBar(
+    value: String,
+    onChange: (String) -> Unit,
+    busy: Boolean,
+    listening: Boolean,
+    voiceLanguage: String,
+    onSend: () -> Unit,
+    onStop: () -> Unit,
+    onMic: () -> Unit,
+    onToggleLanguage: () -> Unit,
+) {
     Row(
         Modifier.fillMaxWidth().background(Jx.Background).padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -262,14 +301,56 @@ private fun InputBar(value: String, onChange: (String) -> Unit, busy: Boolean, o
             IconButton(onClick = onStop, modifier = Modifier.background(Jx.Bad.copy(alpha = 0.2f), CircleShape)) {
                 Icon(Icons.Filled.Stop, contentDescription = "Stop", tint = Jx.Bad)
             }
+        } else if (value.isBlank()) {
+            TextButton(onClick = onToggleLanguage) {
+                Text(if (voiceLanguage == "hi-IN") "हि" else "EN", color = Jx.TextDim)
+            }
+            IconButton(
+                onClick = onMic,
+                enabled = !listening,
+                modifier = Modifier.background(Jx.Accent.copy(alpha = if (listening) 0.45f else 0.2f), CircleShape),
+            ) {
+                Icon(Icons.Filled.Mic, contentDescription = "Speak", tint = Jx.Accent)
+            }
         } else {
             IconButton(
                 onClick = onSend,
-                enabled = value.isNotBlank(),
-                modifier = Modifier.background(Jx.Accent.copy(alpha = if (value.isNotBlank()) 0.2f else 0.05f), CircleShape),
+                modifier = Modifier.background(Jx.Accent.copy(alpha = 0.2f), CircleShape),
             ) {
                 Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Jx.Accent)
             }
+        }
+    }
+}
+
+
+/** Shows the microphone state, partial speech, speaking status and voice errors. */
+@Composable
+private fun VoiceBar(
+    state: ChatUiState,
+    onStopListening: () -> Unit,
+    onStopSpeaking: () -> Unit,
+    onDismiss: () -> Unit,
+    onDownload: () -> Unit,
+) {
+    val l = state.listen
+    val (text, color) = when {
+        l is ListenState.Listening -> "🎙 Listening (offline)… speak now" to Jx.Accent
+        l is ListenState.Partial -> "🎙 ${l.text}" to Jx.Text
+        l is ListenState.Error -> l.message to Jx.Warn
+        state.speaking -> "🔊 Speaking…" to Jx.TextDim
+        else -> return
+    }
+    Row(
+        Modifier.fillMaxWidth().background(Jx.Surface).padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, color = color, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        when {
+            l is ListenState.Listening || l is ListenState.Partial -> TextButton(onClick = onStopListening) { Text("Stop", color = Jx.Bad) }
+            l is ListenState.Error && l.canDownloadModel -> TextButton(onClick = onDownload) { Text("Download", color = Jx.Accent) }
+            l is ListenState.Error -> TextButton(onClick = onDismiss) { Text("OK", color = Jx.TextDim) }
+            state.speaking -> IconButton(onClick = onStopSpeaking) { Icon(Icons.Outlined.VolumeOff, contentDescription = "Stop speaking", tint = Jx.TextDim) }
         }
     }
 }

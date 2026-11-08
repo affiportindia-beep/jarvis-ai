@@ -27,6 +27,15 @@ class Settings(context: Context) {
         _thinkHarder.value = on
     }
 
+    private val _voiceLanguage = MutableStateFlow(prefs.getString(KEY_VOICE_LANG, "hi-IN") ?: "hi-IN")
+    /** Language the offline recogniser listens for: "hi-IN" (Hindi/Hinglish) or "en-IN". */
+    val voiceLanguage: StateFlow<String> = _voiceLanguage.asStateFlow()
+
+    fun setVoiceLanguage(tag: String) {
+        prefs.edit().putString(KEY_VOICE_LANG, tag).apply()
+        _voiceLanguage.value = tag
+    }
+
     var onlineSearchExplained: Boolean
         get() = prefs.getBoolean(KEY_EXPLAINED, false)
         set(v) { prefs.edit().putBoolean(KEY_EXPLAINED, v).apply() }
@@ -35,5 +44,6 @@ class Settings(context: Context) {
         const val KEY_ONLINE = "online_search"
         const val KEY_EXPLAINED = "online_search_explained"
         const val KEY_THINK = "think_harder"
+        const val KEY_VOICE_LANG = "voice_language"
     }
 }
