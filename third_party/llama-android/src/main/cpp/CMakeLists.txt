@@ -1,3 +1,4 @@
+# Modified by JARVIS X (2026): llama.cpp source path. See ../../../MODIFICATIONS.md.
 cmake_minimum_required(VERSION 3.31.6)
 
 project("ai-chat" VERSION 1.0.0 LANGUAGES C CXX)
@@ -30,7 +31,14 @@ if(DEFINED ANDROID_ABI)
     endif()
 endif()
 
-set(LLAMA_SRC ${CMAKE_CURRENT_LIST_DIR}/../../../../../llama.cpp-master)
+# JARVIS X: llama.cpp is cloned by CI (or scripts/fetch_llama.sh) into <repo>/external/llama.cpp
+# at the tag pinned in LLAMA_CPP_TAG. It is never committed to this repository.
+if(NOT DEFINED LLAMA_SRC)
+    set(LLAMA_SRC ${CMAKE_CURRENT_LIST_DIR}/../../../../../external/llama.cpp)
+endif()
+if(NOT EXISTS ${LLAMA_SRC}/CMakeLists.txt)
+    message(FATAL_ERROR "llama.cpp not found at ${LLAMA_SRC}. Run scripts/fetch_llama.sh first.")
+endif()
 add_subdirectory(${LLAMA_SRC} build-llama)
 
 add_library(${CMAKE_PROJECT_NAME} SHARED

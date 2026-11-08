@@ -1,3 +1,4 @@
+// Modified by JARVIS X (2026). See third_party/llama-android/MODIFICATIONS.md.
 #include <android/log.h>
 #include <jni.h>
 #include <iomanip>
@@ -26,7 +27,7 @@ static std::string join(const std::vector<T> &values, const std::string &delim) 
  * LLama resources: context, model, batch and sampler
  */
 constexpr int   N_THREADS_MIN           = 2;
-constexpr int   N_THREADS_MAX           = 4;
+constexpr int   N_THREADS_MAX           = 8;   // JARVIS X: allow up to 8 (caller passes performance-core count)
 constexpr int   N_THREADS_HEADROOM      = 2;
 
 // 4096 covers all use cases (worst case ~3968 tokens for LONG_MEETING:
@@ -44,6 +45,9 @@ static llama_context                    * g_context;
 static llama_batch                        g_batch;
 static common_chat_templates_ptr          g_chat_templates;
 static common_sampler                   * g_sampler;
+
+// JARVIS X: context size chosen at prepare() time instead of a fixed constant.
+static int                                g_n_ctx = DEFAULT_CONTEXT_SIZE;
 
 // True for hybrid SSM+attention models (e.g. Qwen3.5) that use M-RoPE and
 // cannot rewind the recurrent memory state to an earlier position.
@@ -159,9 +163,16 @@ static common_sampler *new_sampler(
 
 extern "C"
 JNIEXPORT jint JNICALL
-Java_com_arm_aichat_internal_InferenceEngineImpl_prepare(JNIEnv * /*env*/, jobject /*unused*/, jint nThreadsHint) {
-    auto *context = init_context(g_model, DEFAULT_CONTEXT_SIZE, nThreadsHint);
-    if (!context) { return 1; }
+Java_com_arm_aichat_internal_InferenceEngineImpl_prepare(JNIEnv * /*env*/, jobject /*unused*/, jint nThreadsHint, jint nCtx) {
+    // JARVIS X: context size is chosen by the app from available RAM (clamped to 512..32768).
+    g_n_ctx = (nCtx > 0) ? std::max(512, std::min((int) nCtx, 32768)) : DEFAULT_CONTEXT_SIZE;
+    auto *context = init_context(g_model, g_n_ctx, nThreadsHint);
+    if (!context) {
+        // JARVIS X: free the model here so a failed prepare never leaves half-initialised state.
+        llama_model_free(g_model);
+        g_model = nullptr;
+        return 1;
+    }
     g_context = context;
     g_batch = llama_batch_init(BATCH_SIZE, 0, 1);
     g_chat_templates = common_chat_templates_init(g_model, "");
@@ -209,7 +220,7 @@ static std::string get_backend() {
 
 extern "C"
 JNIEXPORT jstring JNICALL
-Java_com_arm_aichat_internal_InferenceEngineImpl_systemInfo(JNIEnv *env, jobject /*unused*/) {
+Java_com_arm_aichat_internal_InferenceEngineImpl_systemInfoNative(JNIEnv *env, jobject /*unused*/) {
     return env->NewStringUTF(llama_print_system_info());
 }
 
@@ -340,7 +351,7 @@ static void reset_long_term_states(const bool clear_kv_cache = true) {
     current_position = 0;
     g_encoded_system_prompt.clear();
 
-    if (clear_kv_cache)
+    if (clear_kv_cache && g_context)  // JARVIS X: null-safe
         llama_memory_clear(llama_get_memory(g_context), false);
 }
 
@@ -456,7 +467,7 @@ static int decode_tokens_in_batches(
         LOGv("%s: Preparing a batch size of %d starting at: %d", __func__, cur_batch_size, i);
 
         // Shift context if current batch cannot fit into the context
-        if (start_pos + i + cur_batch_size >= DEFAULT_CONTEXT_SIZE - OVERFLOW_HEADROOM) {
+        if (start_pos + i + cur_batch_size >= g_n_ctx - OVERFLOW_HEADROOM) {
             LOGw("%s: Current batch won't fit into context! Shifting...", __func__);
             shift_context();
         }
@@ -550,7 +561,7 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_processSystemPrompt(
     }
 
     // Handle context overflow
-    const int max_batch_size = DEFAULT_CONTEXT_SIZE - OVERFLOW_HEADROOM;
+    const int max_batch_size = g_n_ctx - OVERFLOW_HEADROOM;
     if ((int) system_tokens.size() > max_batch_size) {
         LOGe("%s: System prompt too long for context! %d tokens, max: %d",
              __func__, (int) system_tokens.size(), max_batch_size);
@@ -657,7 +668,7 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_processUserPrompt(
 
     // Ensure user prompt doesn't exceed the context size by truncating if necessary.
     const int user_prompt_size = (int) user_tokens.size();
-    const int max_batch_size = DEFAULT_CONTEXT_SIZE - OVERFLOW_HEADROOM;
+    const int max_batch_size = g_n_ctx - OVERFLOW_HEADROOM;
     if (user_prompt_size > max_batch_size) {
         const int skipped_tokens = user_prompt_size - max_batch_size;
         user_tokens.resize(max_batch_size);
@@ -719,7 +730,7 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_generateNextToken(
         jobject /*unused*/
 ) {
     // Infinite text generation via context shifting
-    if (current_position >= DEFAULT_CONTEXT_SIZE - OVERFLOW_HEADROOM) {
+    if (current_position >= g_n_ctx - OVERFLOW_HEADROOM) {
         LOGw("%s: Context full! Shifting...", __func__);
         shift_context();
     }
@@ -772,6 +783,57 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_generateNextToken(
 }
 
 
+// ---------------------------------------------------------------------------
+// JARVIS X additions
+// ---------------------------------------------------------------------------
+
+// Number of positions currently occupied in the context (system + chat so far).
+extern "C"
+JNIEXPORT jint JNICALL
+Java_com_arm_aichat_internal_InferenceEngineImpl_contextUsed(JNIEnv * /*env*/, jobject /*unused*/) {
+    return (jint) current_position;
+}
+
+// Context size chosen at prepare() time.
+extern "C"
+JNIEXPORT jint JNICALL
+Java_com_arm_aichat_internal_InferenceEngineImpl_contextSize(JNIEnv * /*env*/, jobject /*unused*/) {
+    return (jint) g_n_ctx;
+}
+
+// Called when the user stops generation early. Commits the partial answer to the chat
+// history and decodes an end-of-turn token, so the KV cache matches what the chat template
+// will render on the next user turn (the same state the normal EOG path leaves behind).
+extern "C"
+JNIEXPORT jint JNICALL
+Java_com_arm_aichat_internal_InferenceEngineImpl_finishPartialAssistant(JNIEnv * /*env*/, jobject /*unused*/) {
+    if (!g_context || !g_model) { return 1; }
+    assistant_ss << cached_token_chars;
+    cached_token_chars.clear();
+    const bool has_chat_template = common_chat_templates_was_explicit(g_chat_templates.get());
+    if (has_chat_template) {
+        try {
+            chat_add_and_format(ROLE_ASSISTANT, assistant_ss.str());
+        } catch (const std::exception &e) {
+            LOGw("%s: could not record partial assistant turn: %s", __func__, e.what());
+        }
+    }
+    const llama_vocab *vocab = llama_model_get_vocab(g_model);
+    llama_token end_token = llama_vocab_eot(vocab);
+    if (end_token == LLAMA_TOKEN_NULL) { end_token = llama_vocab_eos(vocab); }
+    if (end_token != LLAMA_TOKEN_NULL && current_position < g_n_ctx - OVERFLOW_HEADROOM) {
+        common_batch_clear(g_batch);
+        common_batch_add(g_batch, end_token, current_position, {0}, false);
+        if (llama_decode(g_context, g_batch) != 0) {
+            LOGe("%s: failed to decode end-of-turn token", __func__);
+            return 2;
+        }
+        current_position++;
+    }
+    reset_short_term_states();
+    return 0;
+}
+
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_arm_aichat_internal_InferenceEngineImpl_unload(JNIEnv * /*unused*/, jobject /*unused*/) {
@@ -779,12 +841,11 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_unload(JNIEnv * /*unused*/, job
     reset_long_term_states();
     reset_short_term_states();
 
-    // Free up resources
-    common_sampler_free(g_sampler);
+    // Free up resources. JARVIS X: null-safe and idempotent, so error recovery can always call it.
+    if (g_sampler) { common_sampler_free(g_sampler); g_sampler = nullptr; }
     g_chat_templates.reset();
-    llama_batch_free(g_batch);
-    llama_free(g_context);
-    llama_model_free(g_model);
+    if (g_context) { llama_batch_free(g_batch); g_batch = {}; llama_free(g_context); g_context = nullptr; }
+    if (g_model) { llama_model_free(g_model); g_model = nullptr; }
 }
 
 extern "C"

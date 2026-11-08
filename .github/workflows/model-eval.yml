@@ -1,0 +1,65 @@
+name: Model quality eval (desktop CPU)
+
+# Runs the 16 Hindi / English / Hinglish eval prompts against each model with llama.cpp at the
+# same tag as the app, the app's exact system prompt and language hint. Answers are written to
+# the job summary for review. This measures answer QUALITY only; phone speed comes from the
+# in-app benchmark.
+
+on:
+  workflow_dispatch:
+    inputs:
+      models:
+        description: 'Space-separated model files (unsloth Qwen3.5 GGUF names)'
+        default: 'Qwen3.5-0.8B-Q8_0.gguf Qwen3.5-2B-Q4_K_M.gguf Qwen3.5-4B-Q4_K_M.gguf'
+  push:
+    paths:
+      - 'eval/**'
+      - 'core/src/main/resources/jarvisx/system_prompt.txt'
+      - '.github/workflows/model-eval.yml'
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache llama.cpp build
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: external/llama.cpp
+          key: llama-desktop-${{ hashFiles('scripts/llama_cpp_tag.txt') }}-v1
+      - name: Build llama-server
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          ./scripts/fetch_llama.sh
+          cd external/llama.cpp
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=OFF -DLLAMA_OPENSSL=OFF -DGGML_NATIVE=ON
+          cmake --build build --target llama-server -j "$(nproc)"
+      - name: Run eval
+        env:
+          MODELS: ${{ github.event.inputs.models || 'Qwen3.5-0.8B-Q8_0.gguf Qwen3.5-2B-Q4_K_M.gguf Qwen3.5-4B-Q4_K_M.gguf' }}
+        run: |
+          mkdir -p models reports
+          port=8091
+          for f in $MODELS; do
+            repo=$(echo "$f" | sed -E 's/-(Q[0-9A-Z_]+)\.gguf$//')
+            echo "::group::$f"
+            curl -sSL -o "models/$f" "https://huggingface.co/unsloth/${repo}-GGUF/resolve/main/$f"
+            ls -lh "models/$f"
+            external/llama.cpp/build/bin/llama-server -m "models/$f" -c 4096 -t "$(nproc)" --port $port --jinja > server.log 2>&1 &
+            pid=$!
+            for i in $(seq 1 120); do curl -sf http://127.0.0.1:$port/health > /dev/null && break; sleep 2; done
+            name=$(echo "$repo" | sed 's/-/ /')
+            python3 eval/run_eval.py $port "$name" "reports/${f%.gguf}.md" || true
+            kill $pid || true; wait $pid 2>/dev/null || true
+            rm -f "models/$f"
+            cat "reports/${f%.gguf}.md" >> $GITHUB_STEP_SUMMARY
+            echo "::endgroup::"
+            port=$((port+1))
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-reports
+          path: reports/

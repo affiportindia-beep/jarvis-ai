@@ -1,3 +1,4 @@
+// Modified by JARVIS X (2026): adds context size, stop, token metrics. See MODIFICATIONS.md.
 package com.arm.aichat
 
 import com.arm.aichat.InferenceEngine.State
@@ -8,36 +9,22 @@ import kotlinx.coroutines.flow.StateFlow
  * Interface defining the core LLM inference operations.
  */
 interface InferenceEngine {
-    /**
-     * Current state of the inference engine
-     */
+    /** Current state of the inference engine. */
     val state: StateFlow<State>
 
     /**
      * Load a model from the given path.
      *
-     * @param nThreadsHint Number of inference threads to use for this load. Pass -1 to let
-     *   the engine choose automatically based on CPU core count. Use a lower value (e.g. 2)
-     *   on RAM-constrained devices running long sessions to reduce CPU saturation.
+     * @param nThreadsHint Number of inference threads. Pass -1 to let the engine choose.
+     * @param contextSize Context window in tokens. Pass -1 for the default (4096).
      * @throws UnsupportedArchitectureException if model architecture not supported
      */
-    suspend fun loadModel(pathToModel: String, nThreadsHint: Int = -1)
+    suspend fun loadModel(pathToModel: String, nThreadsHint: Int = -1, contextSize: Int = -1)
 
-    /**
-     * Sends a system prompt to the loaded model
-     */
+    /** Sends a system prompt to the loaded model. Resets the conversation. */
     suspend fun setSystemPrompt(systemPrompt: String)
 
-    /**
-     * Updates the sampler configuration without reloading the model.
-     * Takes effect on the next token generation.
-     *
-     * @param temperature Randomness (0.0–2.0)
-     * @param topK Top-K candidates (1–100; 0 = disabled)
-     * @param topP Nucleus sampling threshold (0.0–1.0)
-     * @param minP Min probability relative to top token (0.0–1.0)
-     * @param repeatPenalty Repetition penalty (1.0 = disabled; >1.0 discourages repeats)
-     */
+    /** Updates the sampler configuration without reloading the model. */
     suspend fun setSamplerConfig(
         temperature: Float,
         topK: Int,
@@ -46,29 +33,30 @@ interface InferenceEngine {
         repeatPenalty: Float
     )
 
-    /**
-     * Sends a user prompt to the loaded model and returns a Flow of generated tokens.
-     */
+    /** Sends a user prompt and returns a Flow of generated text pieces. */
     fun sendUserPrompt(message: String, predictLength: Int = DEFAULT_PREDICT_LENGTH): Flow<String>
 
-    /**
-     * Runs a benchmark with the specified parameters.
-     */
+    /** Asks a running generation to stop after the current token. Safe to call at any time. */
+    fun stopGeneration()
+
+    /** Metrics of the last [sendUserPrompt] call. */
+    val lastMetrics: GenerationMetrics
+
+    /** Positions used in the context window right now, and its size. */
+    suspend fun contextUsage(): Pair<Int, Int>
+
+    /** Runs llama.cpp's synthetic benchmark. */
     suspend fun bench(pp: Int, tg: Int, pl: Int, nr: Int = 1): String
 
-    /**
-     * Unloads the currently loaded model.
-     */
+    /** Native system info string (CPU features seen by ggml). */
+    suspend fun systemInfo(): String
+
+    /** Unloads the currently loaded model. */
     fun cleanUp()
 
-    /**
-     * Cleans up resources when the engine is no longer needed.
-     */
+    /** Cleans up resources when the engine is no longer needed. */
     fun destroy()
 
-    /**
-     * States of the inference engine
-     */
     sealed class State {
         object Uninitialized : State()
         object Initializing : State()
@@ -92,6 +80,21 @@ interface InferenceEngine {
     }
 }
 
+/** Timing and size of one generation. */
+data class GenerationMetrics(
+    val promptTokens: Int = 0,
+    val generatedTokens: Int = 0,
+    val prefillMs: Long = 0,
+    val firstTokenMs: Long = 0,
+    val generationMs: Long = 0,
+    val stoppedByUser: Boolean = false,
+) {
+    val tokensPerSecond: Double
+        get() = if (generationMs > 0) generatedTokens * 1000.0 / generationMs else 0.0
+    val prefillTokensPerSecond: Double
+        get() = if (prefillMs > 0) promptTokens * 1000.0 / prefillMs else 0.0
+}
+
 val State.isUninterruptible
     get() = this is State.Initializing ||
         this is State.LoadingModel ||
@@ -107,4 +110,4 @@ val State.isModelLoaded: Boolean
         this is State.ProcessingUserPrompt ||
         this is State.Generating
 
-class UnsupportedArchitectureException : Exception()
+class UnsupportedArchitectureException : Exception("Model could not be loaded (unsupported architecture or damaged file)")
