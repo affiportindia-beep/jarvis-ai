@@ -1,0 +1,40 @@
+name: Model catalog check
+
+# Confirms every model URL in ModelCatalog.kt exists on Hugging Face and prints the
+# size and SHA-256 that Hugging Face publishes, so they can be pinned in the catalog.
+
+on:
+  push:
+    paths:
+      - 'core/src/main/kotlin/com/jarvisx/core/model/ModelCatalog.kt'
+      - '.github/workflows/model-catalog.yml'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe every model URL
+        run: |
+          set -u
+          fail=0
+          echo "| File | HTTP | Size (MB) | SHA-256 (X-Linked-Etag) |" >> $GITHUB_STEP_SUMMARY
+          echo "| --- | --- | --- | --- |" >> $GITHUB_STEP_SUMMARY
+          for path in $(grep -oE '/unsloth/[^"]+\.gguf' core/src/main/kotlin/com/jarvisx/core/model/ModelCatalog.kt); do
+            url="https://huggingface.co$path"
+            headers=$(curl -sI "$url")
+            code=$(echo "$headers" | head -1 | awk '{print $2}')
+            size=$(echo "$headers" | grep -i '^x-linked-size:' | awk '{print $2}' | tr -d '\r')
+            sha=$(echo "$headers" | grep -i '^x-linked-etag:' | awk '{print $2}' | tr -d '"\r')
+            mb=$([ -n "$size" ] && echo $((size / 1048576)) || echo "?")
+            echo "$code $mb MB $sha $url"
+            echo "| ${path##*/} | $code | $mb | \`$sha\` |" >> $GITHUB_STEP_SUMMARY
+            case "$code" in 200|302|307) ;; *) fail=1 ;; esac
+            [ -z "$sha" ] && fail=1
+          done
+          for repo in Qwen3.5-0.8B-GGUF Qwen3.5-2B-GGUF Qwen3.5-4B-GGUF Qwen3.5-9B-GGUF; do
+            echo "--- unsloth/$repo files:"
+            curl -s "https://huggingface.co/api/models/unsloth/$repo/tree/main" | python3 -c "import json,sys; [print(f\"{f['path']}  {f.get('size',0)//1048576} MB\") for f in json.load(sys.stdin) if f['path'].endswith('.gguf')]" || true
+          done
+          exit $fail

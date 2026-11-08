@@ -1,0 +1,23 @@
+JARVIS X
+Copyright 2026 The JARVIS X authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product includes software developed by others:
+
+- third_party/llama-android: derived from HearoPilot-App lib-llama-android
+  (https://github.com/Helldez/HearoPilot-App), Copyright 2026 de.ai (Decentralized AI),
+  Apache License 2.0, which is itself derived from the llama.cpp Android example
+  (Copyright (c) 2023-2026 The ggml authors, MIT License). Modified by JARVIS X; see
+  third_party/llama-android/MODIFICATIONS.md.
+
+- llama.cpp (https://github.com/ggml-org/llama.cpp), Copyright (c) 2023-2026 The ggml
+  authors, MIT License. Downloaded at build time at the tag in scripts/llama_cpp_tag.txt.
+
+- Gradle Wrapper files, Copyright Gradle, Inc., Apache License 2.0.
+
+Model files are not distributed with this product. The user downloads them from Hugging Face
+under their own licences (Qwen3.5: Apache License 2.0).
+
+"JARVIS" is used as a project name only. JARVIS X is not affiliated with or endorsed by
+Marvel Entertainment or The Walt Disney Company.

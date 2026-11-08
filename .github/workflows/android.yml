@@ -1,0 +1,98 @@
+name: Build APK
+
+# Builds the debug APK on GitHub's free runners, runs the unit tests and the
+# API-independence check, and publishes the APK as the "latest-debug" release
+# so it can be downloaded directly on the phone.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: API-independence check (no cloud AI, network only in ModelDownloader)
+        run: ./scripts/check_no_cloud.sh
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install NDK and CMake
+        run: |
+          SDKM="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "ndk;29.0.13113456" "cmake;3.31.6" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Cache llama.cpp source
+        uses: actions/cache@v4
+        with:
+          path: external/llama.cpp
+          key: llama-${{ hashFiles('scripts/llama_cpp_tag.txt') }}
+
+      - name: Fetch llama.cpp at the pinned tag
+        run: ./scripts/fetch_llama.sh
+
+      - name: Unit tests (core)
+        run: ./gradlew :core:test --no-daemon --stacktrace
+
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Inspect APK (size, ABIs, permissions)
+        run: |
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          ls -lh "$APK"
+          unzip -l "$APK" | grep -E 'lib/arm64-v8a/.*\.so' | awk '{print $1, $4}'
+          AAPT=$(ls $ANDROID_HOME/build-tools/*/aapt2 | tail -1)
+          $AAPT dump permissions "$APK" || true
+          echo "### APK" >> $GITHUB_STEP_SUMMARY
+          echo "Size: $(du -h $APK | cut -f1)" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          $AAPT dump permissions "$APK" >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-x-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: core/build/reports/tests/
+          retention-days: 14
+
+      - name: Publish "latest-debug" release (main branch only)
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk jarvis-x-debug.apk
+          gh release delete latest-debug --yes --cleanup-tag || true
+          gh release create latest-debug jarvis-x-debug.apk \
+            --prerelease \
+            --target "${GITHUB_SHA}" \
+            --title "JARVIS X debug build (${GITHUB_SHA::7})" \
+            --notes "Automatic debug build of commit ${GITHUB_SHA}. Install on a 64-bit ARM Android 11+ phone. See README for install steps."
