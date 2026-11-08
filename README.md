@@ -21,7 +21,7 @@ no API keys, no subscriptions, no cloud AI. Free and open source (Apache-2.0).
 
 ## Install (no computer needed)
 
-1. On the phone, open **https://github.com/amardeept-creator/jarvis-x/releases/tag/latest-debug**
+1. On the phone, open **https://github.com/affiportindia-beep/jarvis-ai/releases/tag/latest-debug**
 2. Download **jarvis-x-debug.apk**.
 3. Open it. Android asks to allow installs from your browser: allow it, then tap **Install**.
 4. Open JARVIS X → **Models** → download the recommended model on Wi-Fi.
