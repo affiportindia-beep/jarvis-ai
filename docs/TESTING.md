@@ -15,6 +15,27 @@ Nothing is marked passed unless the test actually ran.
 | Model URLs and checksums | ✅ all 4 exist; SHA-256 pinned in `ModelCatalog.kt` | CI "Model catalog check" |
 | Install and run on a phone | 🟡 waiting for the first install | — |
 
+## Answer quality: desktop eval (2026-11-08)
+
+16 prompts (7 English, 4 Hindi, 5 Hinglish) per model, with the app's exact system prompt and
+language hint, llama.cpp b9574 on a GitHub CPU. One run per model at temperature 0.7, so
+results vary between runs. Speeds are a desktop CPU's, not a phone's.
+
+| Model | Correct script | Expected fact present | Notes |
+| --- | --- | --- | --- |
+| Qwen3.5 4B Q4_K_M | 16/16 | 7/7 | Correct Hindi maths after the fraction-word fix; honest about no internet; refused fake actions; disagreed with a risky plan. Earlier run invented a second Indian capital in Hindi. |
+| Qwen3.5 2B Q4_K_M | 16/16 | 7/7 | Correct facts, but mentioned specific finance websites when asked for a live price. |
+| Qwen3.5 0.8B Q8_0 | 16/16 | 3/7 | Frequent invented facts (wrong capital, made-up gold price). Not recommended above 4 GB RAM. |
+
+Fixes made from this eval: Hindi fraction words (ढाई, डेढ़, साढ़े, आधा, पाव, पौने and Roman
+spellings) get their value added before the model sees them (`HindiNumberWords`, tested);
+the system prompt now lists what this version can and cannot do and forbids inventing
+websites, places or sources. Before the fix every model read "ढाई" as 1.5 or 0.5.
+
+Remaining known limit: small models still invent facts sometimes, more often in Hindi than in
+English. JARVIS X says so on the About screen; document-grounded answers (Milestone 5) and
+memory (Milestone 3) will reduce this for the user's own information.
+
 The APK is large because debug builds keep native debug symbols (`libllama-common.so` alone is
 ~70 MB). A stripped release build in a later milestone should be much smaller.
 
@@ -39,7 +60,7 @@ The APK is large because debug builds keep native debug symbols (`libllama-commo
 | --- | --- | --- |
 | A — Offline operation (chat) | 🟡 | Airplane mode → ask 5 questions in Chat |
 | B — Persistent memory | ⬜ Milestone 3 | — |
-| C — Hindi and Hinglish (text) | 🟡 desktop eval + phone benchmark | Diagnostics → Run benchmark; review eval workflow output |
+| C — Hindi and Hinglish (text) | ✅ desktop eval (4B: 16/16 script, 7/7 facts) · 🟡 phone | Diagnostics → Run benchmark; review eval workflow output |
 | D — CPU inference numbers | 🟡 | Diagnostics → Run benchmark → Share report |
 | E — Android actions | ⬜ Milestone 4 | — |
 | F — Permission safety | ✅ by design for M1: no sensitive permission requested | See permissions guide |

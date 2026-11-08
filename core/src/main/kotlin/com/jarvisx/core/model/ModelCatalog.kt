@@ -43,7 +43,7 @@ object ModelCatalog {
             ramRequiredMb = 1300,
             minTotalRamMb = 3000,
             licence = "Apache-2.0",
-            summary = "Fastest. Short answers and simple questions; weak at reasoning.",
+            summary = "Fastest, but often wrong on facts in testing. Only for phones under 6 GB RAM.",
         ),
         ModelSpec(
             id = "qwen3.5-2b-q4_k_m",
