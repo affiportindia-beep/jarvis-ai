@@ -33,9 +33,9 @@ android {
         if (stableKeystore != null) {
             create("stable") {
                 storeFile = stableKeystore
-                storePassword = System.getenv("JARVISX_KEYSTORE_PASSWORD")
+                storePassword = System.getenv("JARVISX_KEYSTORE_PASSWORD")?.trim()
                 keyAlias = "jarvisx"
-                keyPassword = System.getenv("JARVISX_KEYSTORE_PASSWORD")
+                keyPassword = System.getenv("JARVISX_KEYSTORE_PASSWORD")?.trim()
             }
         }
     }

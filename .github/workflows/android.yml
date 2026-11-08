@@ -67,7 +67,7 @@ jobs:
           KS_B64: ${{ secrets.JARVISX_KEYSTORE_B64 }}
         run: |
           if [ -n "$KS_B64" ]; then
-            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/jarvisx.keystore"
+            echo "$KS_B64" | tr -d " \r\n" | base64 -d > "$RUNNER_TEMP/jarvisx.keystore"
             echo "JARVISX_KEYSTORE_PATH=$RUNNER_TEMP/jarvisx.keystore" >> "$GITHUB_ENV"
             echo "Stable signing key loaded."
           else
