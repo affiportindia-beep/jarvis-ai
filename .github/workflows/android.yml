@@ -86,15 +86,17 @@ jobs:
           path: core/build/reports/tests/
           retention-days: 14
 
-      - name: Publish "latest-debug" release (main branch only)
+      - name: Publish a numbered release (main branch only)
+        # Each build gets its own release; nothing is deleted, so a download in progress
+        # never loses its file. The newest is always at /releases/latest/download/jarvis-x-debug.apk
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp app/build/outputs/apk/debug/app-debug.apk jarvis-x-debug.apk
-          gh release delete latest-debug --yes --cleanup-tag || true
-          gh release create latest-debug jarvis-x-debug.apk \
-            --prerelease \
+          TAG="build-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" jarvis-x-debug.apk \
+            --latest \
             --target "${GITHUB_SHA}" \
-            --title "JARVIS X debug build (${GITHUB_SHA::7})" \
-            --notes "Automatic debug build of commit ${GITHUB_SHA}. Install on a 64-bit ARM Android 11+ phone. See README for install steps."
+            --title "JARVIS X debug build ${GITHUB_RUN_NUMBER} (${GITHUB_SHA::7})" \
+            --notes "Debug build of commit ${GITHUB_SHA}. For 64-bit ARM phones with Android 11+. Install steps: see docs/INSTALL.md."

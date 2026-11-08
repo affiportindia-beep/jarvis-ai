@@ -3,7 +3,7 @@
 ## 1. Install the app
 
 1. On your phone, open
-   **https://github.com/affiportindia-beep/jarvis-ai/releases/tag/latest-debug**
+   **https://github.com/affiportindia-beep/jarvis-ai/releases/latest**
 2. Tap **jarvis-x-debug.apk** to download it (about 60–90 MB).
 3. Open the downloaded file. Android says installs from this source are blocked:
    tap **Settings**, switch on **Allow from this source**, go back, tap **Install**.
