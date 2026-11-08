@@ -3,6 +3,21 @@
 Status legend: ✅ passed and verified · 🟡 built, waiting for a run on the phone · ⬜ later milestone.
 Nothing is marked passed unless the test actually ran.
 
+## Results so far (2026-11-08)
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| API-independence guard | ✅ passed | CI run 42453800461, step "API-independence check" |
+| Unit tests (`core`) | ✅ 30/30 passed | same run, step "Unit tests (core)" |
+| Native build: llama.cpp b9574 + JNI bridge for arm64 | ✅ compiled; 7 CPU variants (armv8.0 → armv9.2) packaged | same run, step "Inspect APK" |
+| Debug APK | ✅ built, 99 MB | release `latest-debug` |
+| APK permissions | ✅ only INTERNET, ACCESS_NETWORK_STATE, FOREGROUND_SERVICE(_DATA_SYNC), POST_NOTIFICATIONS | `aapt2 dump permissions` in CI |
+| Model URLs and checksums | ✅ all 4 exist; SHA-256 pinned in `ModelCatalog.kt` | CI "Model catalog check" |
+| Install and run on a phone | 🟡 waiting for the first install | — |
+
+The APK is large because debug builds keep native debug symbols (`libllama-common.so` alone is
+~70 MB). A stripped release build in a later milestone should be much smaller.
+
 ## Automated tests (run in CI on every push)
 
 | Test | What it checks | Where |

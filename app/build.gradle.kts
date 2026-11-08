@@ -7,6 +7,8 @@ plugins {
 android {
     namespace = "com.jarvisx.app"
     compileSdk = 35
+    // Same NDK as the native module, so packaging can strip debug symbols from the .so files.
+    ndkVersion = "29.0.13113456"
 
     defaultConfig {
         applicationId = "com.jarvisx.app"
