@@ -103,6 +103,7 @@ class CalculatorTool : Tool {
             "hoti", "hote", "hai", "hain", "hoga", "hogi", "kya", "batao", "bataiye", "bata", "tell",
             "me", "answer", "jarvis", "hey", "ok", "okay", "find", "result", "क्या", "है", "कितना",
             "होता", "होगा", "बताओ", "बताइए", "जार्विस", "can", "you", "and", "ji", "yaar", "bhai",
+            "aaj", "abhi", "today", "now", "quickly", "jaldi", "आज", "अभी",
         )
         s = s.replace(Regex("""[=?!]"""), " ")
         val kept = s.split(Regex("""\s+""")).filter { it.isNotEmpty() && it !in filler }

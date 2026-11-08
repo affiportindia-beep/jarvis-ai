@@ -44,6 +44,7 @@ class CalculatorToolTest {
     @Test fun hinglishAndHindi() {
         assertEquals("100", answer("25 into 4 kitna hota hai"))
         assertEquals("30", answer("5 guna 6"))
+        assertEquals("100", answer("aaj 25 into 4 kitna"))
         assertEquals("300", answer("2000 ka 15%"))
         assertEquals("12", answer("144 ka square root"))
         assertEquals("15", answer("७ + ८"))
