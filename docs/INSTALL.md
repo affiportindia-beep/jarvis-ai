@@ -15,7 +15,7 @@ Updating: install a newer `jarvis-x-debug.apk` over the old one. Your downloaded
 ## 2. Download a model (needs internet once)
 
 1. Open JARVIS X → **Models**. The card at the top says which model suits your phone.
-2. Tap **Download** on the recommended model. Use Wi-Fi: the 4B model is about 2.7 GB.
+2. Tap **Download** on the recommended model. Use Wi-Fi: the 4B model is about 2.6 GB.
 3. Android may ask to allow notifications. This only shows download progress; downloading
    works either way.
 4. When the download finishes, JARVIS X checks the file's SHA-256 checksum. A damaged or
@@ -24,9 +24,9 @@ Updating: install a newer `jarvis-x-debug.apk` over the old one. Your downloaded
 
 | Phone RAM | Recommended model | Download |
 | --- | --- | --- |
-| 4 GB | Qwen3.5 0.8B | ~0.9 GB |
-| 6 GB | Qwen3.5 2B | ~1.3 GB |
-| 8 GB or more | Qwen3.5 4B | ~2.7 GB |
+| 4 GB | Qwen3.5 0.8B | ~0.8 GB |
+| 6 GB | Qwen3.5 2B | ~1.2 GB |
+| 8 GB or more | Qwen3.5 4B | ~2.6 GB |
 
 ## 3. Use it offline
 

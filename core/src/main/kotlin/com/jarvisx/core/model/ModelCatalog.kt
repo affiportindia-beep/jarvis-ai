@@ -3,8 +3,8 @@ package com.jarvisx.core.model
 /**
  * One downloadable local model.
  *
- * [sha256] is pinned when known (CI workflow `model-catalog.yml` reports the values from
- * Hugging Face). When null, the downloader takes the SHA-256 that Hugging Face publishes for the
+ * [sha256] is pinned from Hugging Face's published hash (checked by CI workflow
+ * `model-catalog.yml` on 2026-11-08). When null, the downloader takes the SHA-256 that Hugging Face publishes for the
  * file (X-Linked-Etag) before downloading, and refuses the file if the hashes differ.
  */
 data class ModelSpec(
@@ -38,8 +38,8 @@ object ModelCatalog {
             quantization = "Q8_0",
             fileName = "Qwen3.5-0.8B-Q8_0.gguf",
             url = "$HF/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf",
-            approxSizeMb = 870,
-            sha256 = null,
+            approxSizeMb = 774,
+            sha256 = "0ad885ffd4bb022fc4f0d33a3308fa108ef8613159d3b3a67e23abca056b7a6c",
             ramRequiredMb = 1300,
             minTotalRamMb = 3000,
             licence = "Apache-2.0",
@@ -53,8 +53,8 @@ object ModelCatalog {
             quantization = "Q4_K_M",
             fileName = "Qwen3.5-2B-Q4_K_M.gguf",
             url = "$HF/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-Q4_K_M.gguf",
-            approxSizeMb = 1300,
-            sha256 = null,
+            approxSizeMb = 1221,
+            sha256 = "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
             ramRequiredMb = 2300,
             minTotalRamMb = 5500,
             licence = "Apache-2.0",
@@ -68,8 +68,8 @@ object ModelCatalog {
             quantization = "Q4_K_M",
             fileName = "Qwen3.5-4B-Q4_K_M.gguf",
             url = "$HF/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf",
-            approxSizeMb = 2700,
-            sha256 = null,
+            approxSizeMb = 2613,
+            sha256 = "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
             ramRequiredMb = 3600,
             minTotalRamMb = 7500,
             licence = "Apache-2.0",
@@ -83,8 +83,8 @@ object ModelCatalog {
             quantization = "Q4_K_M",
             fileName = "Qwen3.5-9B-Q4_K_M.gguf",
             url = "$HF/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf",
-            approxSizeMb = 5700,
-            sha256 = null,
+            approxSizeMb = 5417,
+            sha256 = "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
             ramRequiredMb = 6800,
             minTotalRamMb = 11000,
             licence = "Apache-2.0",
