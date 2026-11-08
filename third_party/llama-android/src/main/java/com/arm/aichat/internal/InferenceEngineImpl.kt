@@ -71,6 +71,7 @@ internal class InferenceEngineImpl private constructor(
     private external fun contextUsed(): Int
     private external fun contextSize(): Int
     private external fun finishPartialAssistant(): Int
+    private external fun setThinking(enabled: Boolean)
     private external fun unload()
     private external fun shutdown()
 
@@ -161,6 +162,10 @@ internal class InferenceEngineImpl private constructor(
         check(_state.value.isModelLoaded) { "No model loaded" }
         updateSamplerConfig(temperature, topK, topP, minP, repeatPenalty)
         Unit
+    }
+
+    override suspend fun setThinkingEnabled(enabled: Boolean) = withContext(llamaDispatcher) {
+        if (nativeReady) setThinking(enabled)
     }
 
     override fun stopGeneration() {

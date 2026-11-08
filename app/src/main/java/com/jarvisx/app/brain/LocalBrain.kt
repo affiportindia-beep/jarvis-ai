@@ -138,12 +138,16 @@ class LocalBrain(
     }
 
     /** True if the context is nearly full; the caller then starts a new conversation. */
-    suspend fun contextNearlyFull(): Boolean {
+    suspend fun contextNearlyFull(nextPromptTokens: Int = 600): Boolean {
         val (used, size) = engine.contextUsage()
-        return ModelSelector.shouldRestartContext(used, size)
+        return ModelSelector.shouldRestartContext(used, size, maxOf(600, nextPromptTokens + 400))
     }
 
     suspend fun contextUsage(): Pair<Int, Int> = engine.contextUsage()
+
+    suspend fun setThinking(enabled: Boolean) {
+        if (loaded != null) engine.setThinkingEnabled(enabled)
+    }
 
     fun generate(prompt: String, maxTokens: Int = 1024): Flow<String> {
         val spec = loaded ?: error("No model loaded")

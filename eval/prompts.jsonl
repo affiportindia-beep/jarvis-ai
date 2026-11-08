@@ -14,3 +14,7 @@
 {"id": "hinglish-business", "lang": "HINGLISH", "prompt": "Main chai ki dukaan kholna chahta hoon, kya ye accha idea hai? Risk bhi batao.", "expect": ""}
 {"id": "hinglish-explain", "lang": "HINGLISH", "prompt": "AI aur machine learning mein kya difference hai? Simple bhasha mein samjhao.", "expect": ""}
 {"id": "hinglish-code", "lang": "HINGLISH", "prompt": "Python mein list ko reverse kaise karte hain? Ek example do.", "expect": "reverse"}
+{"id": "en-typo", "lang": "ENGLISH", "prompt": "wht is the captial of jappan", "expect": "Tokyo"}
+{"id": "hinglish-typo", "lang": "HINGLISH", "prompt": "mahatma gandi ka janm kab hua tha", "expect": "1869"}
+{"id": "en-followup", "lang": "ENGLISH", "history": [["Who were the guests in the latest episode of a TV talk show?", "I don't have internet access, so I can't check recent episodes."]], "prompt": "so what should you do", "expect": "online search"}
+{"id": "hinglish-followup", "lang": "HINGLISH", "history": [["Ramayana kisne likhi?", "Ramayana Maharishi Valmiki ne likhi thi."]], "prompt": "aur Mahabharata?", "expect": "Vyas"}

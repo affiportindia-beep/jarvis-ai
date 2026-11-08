@@ -48,6 +48,8 @@ static common_sampler                   * g_sampler;
 
 // JARVIS X: context size chosen at prepare() time instead of a fixed constant.
 static int                                g_n_ctx = DEFAULT_CONTEXT_SIZE;
+// JARVIS X: "Think harder" lets Qwen3.5 reason in a <think> block before answering.
+static bool                               g_allow_thinking = false;
 
 // True for hybrid SSM+attention models (e.g. Qwen3.5) that use M-RoPE and
 // cannot rewind the recurrent memory state to an earlier position.
@@ -648,7 +650,7 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_processUserPrompt(
     // Upstream reference: llama.cpp --reasoning off / enable_thinking=false in
     // the Jinja chat template (models/templates/Qwen-Qwen3-0.6B.jinja:82-84).
     // -------------------------------------------------------------------------
-    if (g_model_has_mrope && has_chat_template) {
+    if (g_model_has_mrope && has_chat_template && !g_allow_thinking) {
         const std::string empty_think_prefix = "<think>\n\n</think>\n\n";
         formatted_user_prompt += empty_think_prefix;
         LOGi("%s: M-RoPE thinking model — pre-filled empty <think> block to suppress reasoning",
@@ -786,6 +788,13 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_generateNextToken(
 // ---------------------------------------------------------------------------
 // JARVIS X additions
 // ---------------------------------------------------------------------------
+
+// Enables or disables the reasoning block for the next user prompts.
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_arm_aichat_internal_InferenceEngineImpl_setThinking(JNIEnv * /*env*/, jobject /*unused*/, jboolean enabled) {
+    g_allow_thinking = enabled == JNI_TRUE;
+}
 
 // Number of positions currently occupied in the context (system + chat so far).
 extern "C"

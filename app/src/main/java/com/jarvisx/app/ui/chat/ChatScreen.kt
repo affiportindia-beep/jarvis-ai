@@ -24,6 +24,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.AddComment
+import androidx.compose.material.icons.outlined.Psychology
+import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.PublicOff
+import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.platform.LocalContext
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -59,7 +67,7 @@ fun ChatScreen(onOpenModels: () -> Unit, vm: ChatViewModel = viewModel()) {
     }
 
     Column(Modifier.fillMaxSize().imePadding()) {
-        Header(state, onNewChat = vm::newChat)
+        Header(state, onNewChat = vm::newChat, onToggleOnline = vm::toggleOnline, onToggleThink = vm::toggleThink)
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (state.messages.isEmpty()) {
                 EmptyState(state.brain, onOpenModels)
@@ -83,10 +91,26 @@ fun ChatScreen(onOpenModels: () -> Unit, vm: ChatViewModel = viewModel()) {
             onStop = vm::stop,
         )
     }
+    if (state.showOnlineExplainer) {
+        AlertDialog(
+            onDismissRequest = { vm.confirmOnline(false) },
+            title = { Text("Turn on online search?") },
+            text = {
+                Text(
+                    "When a question is about something current (news, prices, recent episodes), JARVIS X will send " +
+                        "only the search words to Google News and Wikipedia. Your chats, memory and files never leave the phone, " +
+                        "and no AI service is used: the model on this phone reads the results and answers with sources.\n\n" +
+                        "Everything else keeps working offline. You can switch this off any time with the globe button."
+                )
+            },
+            confirmButton = { TextButton(onClick = { vm.confirmOnline(true) }) { Text("Turn on", color = Jx.Accent) } },
+            dismissButton = { TextButton(onClick = { vm.confirmOnline(false) }) { Text("Keep offline") } },
+        )
+    }
 }
 
 @Composable
-private fun Header(state: ChatUiState, onNewChat: () -> Unit) {
+private fun Header(state: ChatUiState, onNewChat: () -> Unit, onToggleOnline: () -> Unit, onToggleThink: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -94,7 +118,24 @@ private fun Header(state: ChatUiState, onNewChat: () -> Unit) {
         CoreOrb(active = state.busy, size = 30.dp)
         Column(Modifier.padding(start = 12.dp).weight(1f)) {
             Text("JARVIS X", style = MaterialTheme.typography.headlineSmall, color = Jx.Text)
-            Text(statusLine(state.brain), style = MaterialTheme.typography.labelSmall, color = Jx.TextDim)
+            Text(
+                statusLine(state.brain).replace("OFFLINE", if (state.onlineSearch) "SEARCH ON" else "OFFLINE"),
+                style = MaterialTheme.typography.labelSmall, color = Jx.TextDim,
+            )
+        }
+        IconButton(onClick = onToggleThink, enabled = !state.busy) {
+            Icon(
+                Icons.Outlined.Psychology,
+                contentDescription = if (state.thinkHarder) "Think harder on (slower)" else "Think harder off",
+                tint = if (state.thinkHarder) Jx.Violet else Jx.TextDim,
+            )
+        }
+        IconButton(onClick = onToggleOnline, enabled = !state.busy) {
+            Icon(
+                if (state.onlineSearch) Icons.Outlined.Public else Icons.Outlined.PublicOff,
+                contentDescription = if (state.onlineSearch) "Online search on" else "Online search off",
+                tint = if (state.onlineSearch) Jx.Accent else Jx.TextDim,
+            )
         }
         IconButton(onClick = onNewChat, enabled = !state.busy) {
             Icon(Icons.Outlined.AddComment, contentDescription = "New chat", tint = Jx.TextDim)
@@ -165,6 +206,21 @@ private fun Bubble(m: ChatMessage) {
                     color = Jx.Text,
                     style = MaterialTheme.typography.bodyLarge,
                 )
+            }
+            if (m.sources.isNotEmpty()) {
+                val context = LocalContext.current
+                Spacer(Modifier.height(8.dp))
+                Text("Sources", style = MaterialTheme.typography.labelSmall, color = Jx.TextDim)
+                m.sources.forEachIndexed { i, r ->
+                    Text(
+                        "[${i + 1}] ${r.title} — ${r.source}${r.date?.let { ", $it" } ?: ""}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Jx.Accent,
+                        modifier = Modifier
+                            .padding(top = 4.dp)
+                            .clickable { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(r.url))) } },
+                    )
+                }
             }
             m.stats?.let {
                 Spacer(Modifier.height(6.dp))

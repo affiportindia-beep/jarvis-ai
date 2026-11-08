@@ -12,3 +12,4 @@ header line, and the full diff is `git log -p -- third_party/llama-android`.
 | `src/main/cpp/CMakeLists.txt` | llama.cpp path is `<repo>/external/llama.cpp`, with a clear error if missing | Repository layout |
 | `InferenceEngine.kt`, `internal/InferenceEngineImpl.kt` | Rewritten around the same JNI: `stopGeneration()`, `GenerationMetrics` (prompt/generated tokens, prefill, first-token and generation time), `contextUsage()`, removed `@FastNative` from long calls | Benchmarks and Diagnostics need real numbers; FastNative blocks GC during multi-second calls |
 | `build.gradle.kts` | minSdk 30, `LLAMA_CURL=OFF`, removed DataStore dependency and publishing block | The engine must never open network connections; unused code removed |
+| `src/main/cpp/ai_chat.cpp`, `InferenceEngine*.kt` | `setThinking()`: when on, the empty `<think>` prefill is skipped so Qwen3.5 reasons first | "Think harder" option |

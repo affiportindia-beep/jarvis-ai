@@ -36,6 +36,9 @@ interface InferenceEngine {
     /** Sends a user prompt and returns a Flow of generated text pieces. */
     fun sendUserPrompt(message: String, predictLength: Int = DEFAULT_PREDICT_LENGTH): Flow<String>
 
+    /** Lets reasoning models (Qwen3.5) think step by step before answering. Off by default. */
+    suspend fun setThinkingEnabled(enabled: Boolean)
+
     /** Asks a running generation to stop after the current token. Safe to call at any time. */
     fun stopGeneration()
 

@@ -52,11 +52,37 @@ jobs:
       - name: Fetch llama.cpp at the pinned tag
         run: ./scripts/fetch_llama.sh
 
+      - name: Fetch live search responses for the parser test
+        run: |
+          mkdir -p "$RUNNER_TEMP/research"
+          curl -sSf -A "JarvisX-CI" "https://news.google.com/rss/search?q=India&hl=en-IN&gl=IN&ceid=IN:en" -o "$RUNNER_TEMP/research/news.xml" || echo "::warning::Google News fetch failed"
+          curl -sSf -A "JarvisX-CI" "https://en.wikipedia.org/w/rest.php/v1/search/page?q=Kapil%20Sharma&limit=3" -o "$RUNNER_TEMP/research/wiki.json" || echo "::warning::Wikipedia fetch failed"
+          echo "RESEARCH_FIXTURE_DIR=$RUNNER_TEMP/research" >> "$GITHUB_ENV"
+
       - name: Unit tests (core)
         run: ./gradlew :core:test --no-daemon --stacktrace
 
+      - name: Load stable signing key (if configured)
+        env:
+          KS_B64: ${{ secrets.JARVISX_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/jarvisx.keystore"
+            echo "JARVISX_KEYSTORE_PATH=$RUNNER_TEMP/jarvisx.keystore" >> "$GITHUB_ENV"
+            echo "Stable signing key loaded."
+          else
+            echo "::warning::No JARVISX_KEYSTORE_B64 secret: this APK uses a one-off debug key and cannot update an existing install."
+          fi
+
       - name: Build debug APK
+        env:
+          JARVISX_KEYSTORE_PASSWORD: ${{ secrets.JARVISX_KEYSTORE_PASSWORD }}
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Show signing certificate
+        run: |
+          APKSIGNER=$(ls $ANDROID_HOME/build-tools/*/apksigner | tail -1)
+          $APKSIGNER verify --print-certs app/build/outputs/apk/debug/app-debug.apk | grep -E "SHA-256|DN" | head -2
 
       - name: Inspect APK (size, ABIs, permissions)
         run: |

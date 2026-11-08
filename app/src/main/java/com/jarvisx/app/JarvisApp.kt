@@ -6,6 +6,7 @@ import com.jarvisx.app.brain.BenchmarkRunner
 import com.jarvisx.app.brain.LocalBrain
 import com.jarvisx.app.device.HardwareProfiler
 import com.jarvisx.app.models.ModelStore
+import com.jarvisx.app.research.WebSearch
 import com.jarvisx.core.router.Router
 import com.jarvisx.core.tools.CalculatorTool
 import com.jarvisx.core.tools.DateTimeTool
@@ -25,9 +26,11 @@ class JarvisApp : Application() {
 class AppGraph(app: Application) {
     val profiler = HardwareProfiler(app)
     val modelStore = ModelStore(app)
+    val settings = Settings(app)
+    val webSearch = WebSearch(app)
     val tools = ToolRegistry(listOf(CalculatorTool(), DateTimeTool()))
     val router = Router(tools)
     val brain = LocalBrain(app, profiler, modelStore)
-    val assistant = Assistant(router, brain)
+    val assistant = Assistant(router, brain, webSearch, settings)
     val benchmark = BenchmarkRunner(app, brain, profiler, modelStore)
 }

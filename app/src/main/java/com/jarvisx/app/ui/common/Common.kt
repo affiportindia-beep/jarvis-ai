@@ -102,7 +102,10 @@ fun KeyValue(key: String, value: String) {
 
 /** Tiny Markdown subset for model answers: **bold**, _italic_, `code`; hides stray <think> tags. */
 fun markdownLite(raw: String): AnnotatedString {
-    val text = raw.replace(Regex("(?s)<think>.*?</think>"), "").replace("<think>", "").replace("</think>", "").trimStart()
+    // Reasoning ("Think harder") is hidden; while it is still running, show a placeholder.
+    val closed = raw.replace(Regex("(?s)<think>.*?</think>"), "")
+    val text = (if (closed.contains("<think>")) closed.substringBefore("<think>") + "Thinking…" else closed)
+        .replace("</think>", "").trimStart()
     return buildAnnotatedString {
         var i = 0
         while (i < text.length) {

@@ -16,11 +16,22 @@ else
   echo "   ok"
 fi
 
-echo "2) Network access only in ModelDownloader.kt"
+echo "2) Network access only in ModelDownloader.kt and research/WebSearch.kt"
 net='HttpURLConnection|openConnection\(|HttpsURLConnection|java\.net\.Socket|okhttp3|retrofit2|io\.ktor|WebSocket|URL\('
-offenders=$(grep -RIlE "$net" app core third_party --include='*.kt' --include='*.java' | grep -v 'app/src/main/java/com/jarvisx/app/models/ModelDownloader.kt' || true)
+offenders=$(grep -RIlE "$net" app core third_party --include='*.kt' --include='*.java' \
+  | grep -v -e 'app/src/main/java/com/jarvisx/app/models/ModelDownloader.kt' -e 'app/src/main/java/com/jarvisx/app/research/WebSearch.kt' || true)
 if [ -n "$offenders" ]; then
   echo "   FAIL: network code outside ModelDownloader.kt:"; echo "$offenders"; fail=1
+else
+  echo "   ok"
+fi
+
+echo "2b) Optional search may only contact its allow-list"
+hosts=$(grep -oE 'ALLOWED_HOSTS = setOf\([^)]*\)' core/src/main/kotlin/com/jarvisx/core/research/Research.kt || true)
+if [ "$hosts" != 'ALLOWED_HOSTS = setOf("news.google.com", "en.wikipedia.org", "hi.wikipedia.org")' ]; then
+  echo "   FAIL: search allow-list changed or missing: $hosts"; fail=1
+elif ! grep -q 'require(ResearchPolicy.isAllowed(url))' app/src/main/java/com/jarvisx/app/research/WebSearch.kt; then
+  echo "   FAIL: WebSearch no longer enforces the allow-list"; fail=1
 else
   echo "   ok"
 fi

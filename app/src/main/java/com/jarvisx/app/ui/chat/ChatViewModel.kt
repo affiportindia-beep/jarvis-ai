@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.jarvisx.app.JarvisApp
 import com.jarvisx.app.brain.AssistantEvent
 import com.jarvisx.app.brain.BrainStatus
+import com.jarvisx.core.research.SearchResult
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,12 +25,16 @@ data class ChatMessage(
     val stats: String? = null,
     val isError: Boolean = false,
     val streaming: Boolean = false,
+    val sources: List<SearchResult> = emptyList(),
 )
 
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val busy: Boolean = false,
     val brain: BrainStatus = BrainStatus.NoModel,
+    val onlineSearch: Boolean = false,
+    val thinkHarder: Boolean = false,
+    val showOnlineExplainer: Boolean = false,
 )
 
 class ChatViewModel(app: Application) : AndroidViewModel(app) {
@@ -41,6 +46,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         viewModelScope.launch { graph.brain.status.collect { s -> _state.update { it.copy(brain = s) } } }
+        viewModelScope.launch { graph.settings.onlineSearch.collect { on -> _state.update { it.copy(onlineSearch = on) } } }
+        viewModelScope.launch { graph.settings.thinkHarder.collect { on -> _state.update { it.copy(thinkHarder = on) } } }
     }
 
     fun send(text: String) {
@@ -52,6 +59,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         job = viewModelScope.launch {
             val buffer = StringBuilder()
             var source: String? = null
+            var sources: List<SearchResult> = emptyList()
             try {
                 graph.assistant.respond(trimmed).collect { e ->
                     when (e) {
@@ -59,13 +67,18 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                             source = toolLabel(e.toolId)
                             upsert(ChatMessage(answerId, Role.ASSISTANT, e.text, source = source))
                         }
+                        is AssistantEvent.Searching -> {
+                            source = "Searching the web for \"${e.query}\"…"
+                            upsert(ChatMessage(answerId, Role.ASSISTANT, "", source = source, streaming = true))
+                        }
+                        is AssistantEvent.Sources -> sources = e.results
                         is AssistantEvent.ModelStarted -> {
                             source = e.modelName
-                            upsert(ChatMessage(answerId, Role.ASSISTANT, "", source = source, streaming = true))
+                            upsert(ChatMessage(answerId, Role.ASSISTANT, "", source = source, streaming = true, sources = sources))
                         }
                         is AssistantEvent.Token -> {
                             buffer.append(e.piece)
-                            upsert(ChatMessage(answerId, Role.ASSISTANT, buffer.toString(), source = source, streaming = true))
+                            upsert(ChatMessage(answerId, Role.ASSISTANT, buffer.toString(), source = source, streaming = true, sources = sources))
                         }
                         is AssistantEvent.Notice -> add(ChatMessage(nextId++, Role.NOTICE, e.text))
                         is AssistantEvent.Error -> add(ChatMessage(nextId++, Role.NOTICE, e.message, isError = true))
@@ -78,7 +91,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                                 )
                             }
                             if (m != null) {
-                                upsert(ChatMessage(answerId, Role.ASSISTANT, buffer.toString().ifBlank { "(no answer)" }, source = source, stats = stats))
+                                upsert(ChatMessage(answerId, Role.ASSISTANT, buffer.toString().ifBlank { "(no answer)" }, source = source, stats = stats, sources = sources))
                             }
                         }
                     }
@@ -95,6 +108,26 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun stop() = graph.brain.stop()
+
+    fun toggleThink() = graph.settings.setThinkHarder(!_state.value.thinkHarder)
+
+    /** First switch-on shows what leaves the phone; the user confirms before it is enabled. */
+    fun toggleOnline() {
+        val on = _state.value.onlineSearch
+        if (!on && !graph.settings.onlineSearchExplained) {
+            _state.update { it.copy(showOnlineExplainer = true) }
+        } else {
+            graph.settings.setOnlineSearch(!on)
+        }
+    }
+
+    fun confirmOnline(enable: Boolean) {
+        _state.update { it.copy(showOnlineExplainer = false) }
+        if (enable) {
+            graph.settings.onlineSearchExplained = true
+            graph.settings.setOnlineSearch(true)
+        }
+    }
 
     fun newChat() {
         if (_state.value.busy) return

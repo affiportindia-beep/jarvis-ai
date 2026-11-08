@@ -66,6 +66,30 @@ class ModelsViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { graph.brain.unload() } // next question loads the newly chosen model
     }
 
+    private val importer = com.jarvisx.app.models.ModelImporter(app, graph.modelStore)
+    val importStatus = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    val importing = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    fun importModel(uri: android.net.Uri) {
+        if (importing.value) return
+        importing.value = true
+        importStatus.value = "Checking file…"
+        viewModelScope.launch {
+            try {
+                val spec = importer.import(uri) { p ->
+                    importStatus.value = "Copying and verifying: ${p.bytes / (1024 * 1024)}" +
+                        (if (p.total > 0) " / ${p.total / (1024 * 1024)} MB" else " MB")
+                }
+                DownloadCenter.set(spec.id, DownloadState.Done)
+                importStatus.value = "✓ ${spec.displayName} imported and verified. You can delete the copy in Downloads."
+            } catch (e: Exception) {
+                importStatus.value = "Import failed: ${e.message}"
+            } finally {
+                importing.value = false
+            }
+        }
+    }
+
     fun delete(spec: ModelSpec) {
         viewModelScope.launch {
             if (graph.brain.loaded == spec) graph.brain.unload()
@@ -95,7 +119,13 @@ fun ModelsScreen(vm: ModelsViewModel = viewModel()) {
         else { pendingDownload = spec; notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS) }
     }
 
-    val profile = remember(refresh, downloads) { vm.profile() }
+    val importStatus by vm.importStatus.collectAsStateWithLifecycle()
+    val importing by vm.importing.collectAsStateWithLifecycle()
+    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) vm.importModel(uri)
+    }
+
+    val profile = remember(refresh, downloads, importing) { vm.profile() }
     val rec = remember(refresh) { vm.recommended() }
     val selected = remember(refresh, downloads) { vm.selectedId() }
     val anyActive = downloads.values.any { it is DownloadState.Checking || it is DownloadState.Downloading || it is DownloadState.Verifying }
@@ -127,8 +157,26 @@ fun ModelsScreen(vm: ModelsViewModel = viewModel()) {
                 )
             }
         }
+        item {
+            Card {
+                SectionTitle("Already have the model file?")
+                Text(
+                    "Import a .gguf file from your phone (for example Downloads) instead of downloading it again. " +
+                        "It is accepted only if its SHA-256 matches a JARVIS X model.",
+                    color = Jx.TextDim, style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = { pickFile.launch(arrayOf("*/*")) }, enabled = !importing && !anyActive) {
+                    Text(if (importing) "Importing…" else "Import model file")
+                }
+                importStatus?.let {
+                    Spacer(Modifier.height(6.dp))
+                    Text(it, color = if (it.startsWith("Import failed")) Jx.Bad else Jx.TextDim, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
         items(ModelCatalog.all, key = { it.id }) { spec ->
-            val installed = vm.isInstalled(spec)
+            val installed = remember(refresh, downloads, importing) { vm.isInstalled(spec) }
             val st = downloads[spec.id] ?: DownloadState.Idle
             val fits = ModelSelector.canLoadNow(spec, profile)
             Card {

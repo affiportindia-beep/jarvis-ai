@@ -57,6 +57,7 @@ data class DiagState(
 class DiagnosticsViewModel(app: Application) : AndroidViewModel(app) {
     private val graph = (app as JarvisApp).graph
     val brain = graph.brain.status
+    val online = graph.settings.onlineSearch
     private val _state = MutableStateFlow(DiagState())
     val state: StateFlow<DiagState> = _state.asStateFlow()
 
@@ -104,6 +105,7 @@ class DiagnosticsViewModel(app: Application) : AndroidViewModel(app) {
 fun DiagnosticsScreen(vm: DiagnosticsViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
     val brain by vm.brain.collectAsStateWithLifecycle()
+    val online by vm.online.collectAsStateWithLifecycle()
     val context = LocalContext.current
     LaunchedEffect(Unit) { vm.refreshLoop() }
 
@@ -117,7 +119,8 @@ fun DiagnosticsScreen(vm: DiagnosticsViewModel = viewModel()) {
             SectionTitle("Privacy status")
             KeyValue("AI inference", "on this phone (llama.cpp, CPU)")
             KeyValue("Cloud AI / API keys", "none — not present in the app")
-            KeyValue("Network use", "model downloads only, when you tap Download")
+            KeyValue("Network use", "model downloads when you tap Download; optional search when the globe is on")
+            KeyValue("Online search", if (online) "ON · sends only search words to news.google.com and wikipedia.org" else "OFF")
             KeyValue("Microphone", "not used in this version")
         }
 

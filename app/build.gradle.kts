@@ -14,22 +14,40 @@ android {
         applicationId = "com.jarvisx.app"
         minSdk = 30
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0-m1"
+        // Each CI build gets a higher versionCode so it installs as an update.
+        val build = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionCode = build
+        versionName = "0.2.$build"
         ndk {
             // The native engine is built for 64-bit ARM only (every phone from roughly 2017 on).
             abiFilters += listOf("arm64-v8a")
         }
     }
 
+    // Stable signature: CI decodes the private key from the repository secrets
+    // JARVISX_KEYSTORE_B64 / JARVISX_KEYSTORE_PASSWORD into JARVISX_KEYSTORE_PATH. With the
+    // same key every build installs as an update and keeps downloaded models. Without the
+    // secrets (forks, local builds) the standard per-machine debug key is used.
+    val stableKeystore = System.getenv("JARVISX_KEYSTORE_PATH")?.let { file(it) }?.takeIf { it.isFile }
+    signingConfigs {
+        if (stableKeystore != null) {
+            create("stable") {
+                storeFile = stableKeystore
+                storePassword = System.getenv("JARVISX_KEYSTORE_PASSWORD")
+                keyAlias = "jarvisx"
+                keyPassword = System.getenv("JARVISX_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
+            if (stableKeystore != null) signingConfig = signingConfigs.getByName("stable")
         }
         release {
             isMinifyEnabled = false
-            // Milestone 1 ships debug builds only; a release signing key is added in Phase 10.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (stableKeystore != null) signingConfigs.getByName("stable") else signingConfigs.getByName("debug")
         }
     }
     compileOptions {

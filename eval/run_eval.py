@@ -49,9 +49,13 @@ def script_ok(lang, text):
         return deva / total >= 0.5
     return deva / total <= 0.05
 
-def ask(port, system, user):
+def ask(port, system, user, history=()):
+    msgs = [{"role": "system", "content": system}]
+    for u, a in history:
+        msgs += [{"role": "user", "content": u}, {"role": "assistant", "content": a}]
+    msgs.append({"role": "user", "content": user})
     body = json.dumps({
-        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        "messages": msgs,
         "temperature": 0.7, "top_p": 0.8, "top_k": 20, "max_tokens": 320,
         "chat_template_kwargs": {"enable_thinking": False},
     }).encode()
@@ -71,7 +75,7 @@ def main():
     for p in prompts:
         user = f"{annotate(p['prompt'])}\n\n({HINTS[p['lang']]})"
         try:
-            text, tps, secs = ask(port, system, user)
+            text, tps, secs = ask(port, system, user, p.get("history", []))
         except Exception as e:  # report, don't hide
             text, tps, secs = f"ERROR: {e}", 0.0, 0.0
         text = text.replace("<think>", "").replace("</think>", "").strip()
@@ -97,7 +101,8 @@ def main():
             mark = "✅" if ok else "❌ wrong script"
             e = "" if exp_ok is None else (" · keyword ✅" if exp_ok else f" · keyword ❌ (`{p['expect']}`)")
             f.write(f"<details><summary><b>{p['id']}</b> ({p['lang']}) {mark}{e} · {tps:.1f} tok/s</summary>\n\n")
-            f.write(f"**Q:** {p['prompt']}\n\n**A:**\n\n{text}\n\n</details>\n\n")
+            hist = "".join(f"> {u}\n>\n> _{a}_\n\n" for u, a in p.get("history", []))
+            f.write(f"{hist}**Q:** {p['prompt']}\n\n**A:**\n\n{text}\n\n</details>\n\n")
 
 if __name__ == "__main__":
     main()

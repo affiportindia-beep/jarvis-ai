@@ -8,10 +8,14 @@ kotlin {
 }
 
 dependencies {
+    compileOnly(libs.org.json)
+    testImplementation(libs.org.json)
     testImplementation(libs.junit)
 }
 
 tasks.withType<Test> {
+    // Live web responses fetched by CI (see android.yml); the test is skipped when unset.
+    System.getenv("RESEARCH_FIXTURE_DIR")?.let { environment("RESEARCH_FIXTURE_DIR", it) }
     testLogging {
         events("passed", "failed", "skipped")
         showStandardStreams = false
